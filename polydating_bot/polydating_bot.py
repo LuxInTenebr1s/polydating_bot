@@ -58,7 +58,7 @@ def main():
 
     dispatcher = updater.dispatcher
 
-    dispatcher.add_handler(CommandHandler('start', start))
+    dispatcher.add_handler(CommandHandler('start', start), 1)
     dispatcher.add_handler(CommandHandler('put', put, Filters.chat_type.private))
     dispatcher.add_handler(CommandHandler('get', get, Filters.chat_type.private))
 

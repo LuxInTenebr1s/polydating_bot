@@ -3,9 +3,11 @@ import configparser
 import logging
 import os
 import argparse
+from typing import Union
 
 from yaml import load, dump
 from telegram.ext import Updater
+from telegram import Chat, Bot, TelegramError
 
 from yamlpersistence import YamlPersistence
 
@@ -19,7 +21,7 @@ def parse_config(path: os.path) -> Updater:
         #TODO: exception
         if 'token' in config['Bot']:
             token = config['Bot']['token']
-            logger.info("Bot token is: " + token) 
+            logger.info("Bot token is: " + token)
 
             directory = config['Common']['db_dir']
             my_persistence = YamlPersistence(directory)
@@ -28,7 +30,7 @@ def parse_config(path: os.path) -> Updater:
         else:
             #TODO: handle this
             logger.info("Couldn't parse config")
-            return nill 
+            return nill
 
 def parse_arg() -> None:
     parser = argparse.ArgumentParser(description='Polydating bot daemon.')
@@ -38,3 +40,14 @@ def parse_arg() -> None:
 
 def parse_form():
     return yaml.load(open('config/dating-form.yaml', 'r'))
+
+def check_chat_id(id: Union[id, str]) -> int:
+    chat: Chat = {}
+    if isinstance(id, int) or isinstance(id, str) and '@' in id:
+        try:
+            chat = Bot.getChat(id)
+        except TelegramError as exc:
+            raise TypeError(f"Couldn\'n get chat: {id}") from exc
+
+    return chat.id if chat else None
+
