@@ -42,7 +42,7 @@ class YamlPersistence(BasePersistence):
     @staticmethod
     def get_filename(id: int, data: Dict) -> str:
         if 'hr_id' in data:
-            return f'{id}_{data["hr_id"]}.yaml' 
+            return f'{id}_{data["hr_id"]}.yaml'
         else:
             return f'{id}_none.yaml'
 
@@ -54,13 +54,13 @@ class YamlPersistence(BasePersistence):
         except OSError:
             return None
         except yaml.YAMLError as exc:
-            if hasattr(exc, 'problem_mark'):
-                mark = exc.problem_mark
-                raise TypeError(f"Incorrect YAML: {filename}: {mark}") from exc
+            mark = getattr(exc, 'problem_mark')
+            if mark:
+                raise TypeError(f'Incorrect YAML: {filename}: {mark}') from exc
             else:
-                raise TypeError(f"YAML loading error: {filename}") from exc
+                raise TypeError(f'YAML loading error: {filename}') from exc
         except Exception as exc:
-            raise TypeError(f"Something went wrong loading {filename}") from exc
+            raise TypeError(f'Something went wrong loading {filename}') from exc
 
     @staticmethod
     def load_directory(directory: str) -> Any:
@@ -100,7 +100,7 @@ class YamlPersistence(BasePersistence):
         if self.chat_data.get(chat_id) == data:
             return
         self.user_data[chat_id] = data
-        
+
         if not self.on_flush:
             filename = self.get_filename(chat_id, data)
             path = os.path.join(self.directory, CHAT_DIRECTORY, filename)
@@ -165,4 +165,4 @@ class YamlPersistence(BasePersistence):
         if self.bot_data:
             path = os.path.join(self.directory, BOT_FILENAME)
             self.dump_file(path, self.bot_data)
-            
+
