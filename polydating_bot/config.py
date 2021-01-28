@@ -6,16 +6,12 @@ from os import (
 )
 from typing import Dict, AnyStr, Mapping, Any
 
-import yaml
-try:
-    from yaml import CLoader as Loader, CDumper as Dumper
-except ImportError:
-    from yaml import Loader, Dumper
-
+from configparser import ConfigParser
 from argparse import (
     ArgumentParser,
     ArgumentError,
     ArgumentTypeError,
+    Namespace,
 )
 
 import helpers
@@ -86,12 +82,18 @@ class BotConfigMeta(type):
 
 class BotConfig(metaclass=BotConfigMeta):
     def __init__(self):
-        config = self.__parse_args()
-        if 'config_dir' in config:
-            self.config_dir
-        config = self.__parse_config('')
+        cls = self.__class__
+        args = helpers.dict_strip(vars(cls.__parse_args()))
 
-    def update(self):
+        config_dir = args.get('config_dir')
+        if config_dir:
+            cls.config_dir = config_dir
+
+        config = helpers.dict_strip(cls.__parse_config(cls.config_dir))
+        logger.info(f'{args}\n{config}')
+        args.update(config)
+
+        cls.__update(args)
 
     @classmethod
     def __update(cls, conf: Dict[str, Any]) -> None:
@@ -115,16 +117,18 @@ class BotConfig(metaclass=BotConfigMeta):
         for filename in listdir(pathname):
             if filename.endswith('.ini'):
                 break
-        with open(path.join(pathname, filename)) as file:
-            try:
-                return yaml.load(file, Loader=Loader)['Common']
-            except yaml.YAMLError as exc:
-                error = f"{'exc.problem_mark'}" if hasattr(exc, 'problem_mark') else ''
-                raise TypeError((f"Error in config \'{filename}\'.\n",
-                                 f"{error}",)) from exc
+
+        config = ConfigParser(allow_no_value=True)
+        config.read(path.join(pathname, filename))
+        config = config._sections
+
+        if 'Common' in config:
+            return config['Common']
+        else:
+            return {}
 
     @classmethod
-    def __parse_args(cls) -> Dict:
+    def __parse_args(cls) -> Namespace:
         parser = ArgumentParser(description='PolyDating bot daemon.')
 
         parser.add_argument('-c', '--config-dir', dest='config_dir', metavar='path',
@@ -137,13 +141,17 @@ class BotConfig(metaclass=BotConfigMeta):
         group.add_argument('-t', '--token',  metavar='file', dest='token',
                             type=cls.__open_token, help='bot token filename')
 
-        group.add_argument('token', required=False, dest='token', help='token string')
+        group.add_argument('token', nargs='?', help='token string')
 
         parser.add_argument('--log-level', metavar='log', dest='loglevel',
                             choices=['critical', 'error', 'warning', 'info', 'debug'],
                             help='log verbosity level [warning]')
         try:
-            return parser.parse_args()
+            args = parser.parse_args()
+            if args:
+                return args
+            else:
+                return {}
         except ArgumentError as exc:
             raise TypeError((f"Incorrect arguments. See help.\n\n",
                              f"{'ArgumentParser.print_help()'}",)) from exc

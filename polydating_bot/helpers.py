@@ -2,7 +2,7 @@ import inspect
 import yaml
 import configparser
 import logging
-from typing import Union
+from typing import Union, Dict
 
 from telegram.ext import Dispatcher
 from telegram import (
@@ -26,6 +26,8 @@ def check_chat_id(id: Union[id, str]) -> int:
     return chat.id if chat else None
 
 def get_property_object(obj: object, attr: str) -> property:
+    assert not attr.startswith('_')
+
     obj_list = []
     if inspect.isclass(obj):
         obj_list.extend(obj.__class__.mro(obj))
@@ -36,3 +38,12 @@ def get_property_object(obj: object, attr: str) -> property:
         if attr in obj.__dict__:
             return obj.__dict__[attr]
     raise AttributeError(obj)
+
+def dict_strip(data: Dict) -> Dict:
+    keys = []
+    for key, val in data.items():
+        if not val:
+           keys.append(key)
+    for key in keys:
+        del data[key]
+    return data
