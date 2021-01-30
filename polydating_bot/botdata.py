@@ -1,4 +1,5 @@
-from typing import List, Dict, Union
+import logging
+from typing import List, Dict, Union, Optional, Tuple
 
 from telegram import (
     TelegramObject,
@@ -10,65 +11,70 @@ from telegram import (
 import config
 import helpers
 
-class BotData(config.BotConfig, TelegramObject):
-    uuid: str
-    owner: int = None
-    admin_list: List[int] = []
-    channel: int = None
-    pending_forms: List[int] = []
-    questions: Dict[str, str]
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
+)
+
+logger = logging.getLogger(__name__)
+
+class BotData():
+    __uuid: str = str()
+    __owner: Optional[int] = None
+    __dating_channel: Optional[int] = None
+    __questions: Dict[str, str] = dict()
+
+    admins: helpers.IdList = helpers.IdList('admins')
+    pending_forms: helpers.IdList = helpers.IdList('pending_forms')
 
     def __init__(self, uuid: str):
-        self.uuid = uuid
+        self.__uuid = uuid
 
-    def check_uuid(self, uuid: str, chat: Chat) -> bool:
-        if self.uuid == uuid:
-            #TODO: log uuid update
-            self.update_owner(chat.id)
-            return True
+    @property
+    def uuid(self) -> str:
+        return self.__uuid
+
+    @property
+    def owner(self) -> int:
+        return self.__owner
+
+    @owner.setter
+    def owner(self, value: Tuple[str, int]) -> None:
+        if self.__owner:
+            logger.warning(f'Trying to set new owner! Owner has already been set.')
+            return
+
+        if value[0] != self.uuid:
+            logger.warning(f'Incorrect UUID! Can\'t set new owner: {value[1]}.')
+            return
+
+        logger.info(f'helpers')
+        id = helpers.get_chat_id(value[1])
+        logger.info(f'helpers: {id}')
+        if id:
+            logger.info(f'Setting new owner: {value[1]}')
+            self.__owner = id
         else:
-            #TODO: someone is trying
-            return False
+            logger.warning(f'Couldn\'t set new owner! Incorrect chat id: {id}')
 
-    def get_owner(self) -> int:
-        return self.owner
+    @property
+    def dating_channel(self) -> Optional[Dict[int, str]]:
+        return self.__dating_channel
 
-    def update_owner(self, id: int) -> None:
-        if self.owner:
-            pass
-            #TODO: send error/notification
-        else:
-            self.owner = id
+    @dating_channel.setter
+    def dating_channel(self, value: Union[int, str, None]) -> None:
+        id = helpers.get_chat_id(value)
+        if id:
+            logger.info(f'Adding new dating channel: {id}')
+            self.__dating_channel = chat_id
 
-    def add_admin(self, id: Union[int, str]) -> None:
-        chat_id = helpers.check_chat_id(id)
-        if chat_id:
-            self.admin_list.append(chat_id)
+    @dating_channel.deleter
+    def dating_channel(self) -> None:
+        self.__dating_channel = None
 
-    def remove_admin(self, id: Union[int, str]) -> None:
-        chat_id = helpers.check_chat_id(id)
-        if chat_id:
-            self.admin_list.remove(chat_id)
+    @property
+    def questions(self) -> Dict[str, str]:
+        return self.__questions
 
-    def get_channel(self) -> Dict[int, str]:
-        return helpers.get_chat(id)
-
-    def update_channel(self, id: Union[int, str, None]) -> None:
-        if not id:
-            self.channel = None
-        else:
-            chat_id = helpers.check_chat_id(id)
-            if chat_id:
-                self.channel = chat_id
-
-    def add_pending_form(self, id: int) -> None:
-        self.pending_forms.append(id)
-
-    def remove_pending_form(self, id: int) -> None:
-        self.pending_forms.remove(id)
-
-    def get_questions(self) -> Dict[str, str]:
-        return self.questions
-
-    def update_questions(self, questions: Dict[str, str]) -> None:
-        self.questions.update(questions)
+    @questions.setter
+    def questions(self, value: Dict[str, str]) -> None:
+        self.__questions = value

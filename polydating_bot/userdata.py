@@ -5,39 +5,55 @@ from telegram import Chat, TelegramObject
 
 class DatingForm(TelegramObject):
     def __init__(self, chat: Chat):
-        self.questions: Dict[str, str] = defaultdict(str)
-        self.name: str
-        self.age: int
-        self.place: str
+        self.__name: str
+        self.__age: int
+        self.__place: str
+        self.__nick: str = self.__nick_from_chat(chat)
 
+        self.answers: Dict[str, str] = defaultdict(str)
+
+    @staticmethod
+    def __nick_from_chat(chat: Chat) -> str:
         if chat.username:
-            self.nick = f'@{chat.username}'
+            return f'@{chat.username}'
         else:
-            self.nick = f'{chat.first_name} {chat.last_name}'
+            return f'{chat.first_name} {chat.last_name}'
 
-    def get_answer(self, tag: str) -> str:
-        return self.questions[tag]
+    @property
+    def age(self) -> int:
+        return self.__age
 
-    def update_answer(self, tag: str, answer: str) -> None:
-        self.questions[tag] = answer
+    @age.setter
+    def age(self, value: int) -> None:
+        if not 0 < value < 200:
+            raise ValueError(f'Age: incorrect value.')
+        self.__age = value
 
-    def get_age(self) -> int:
-        return int(self.age)
+    @property
+    def place(self) -> str:
+        return self.__place
 
-    def update_age(self, age: int) -> None:
-        self.age = age
+    @place.setter
+    def place(self, value: str) -> None:
+        self.__place = str(value)
 
-    def get_place(self) -> str:
-        return self.place
+    @property
+    def name(self) -> str:
+        return self.__name
 
-    def update_place(self, place: str) -> None:
-        self.place = place
+    @name.setter
+    def name(self, value: str) -> None:
+        self.__name = str(value)
 
-    def get_nick(self) -> str:
-        return self.nick
+    @property
+    def nick(self) -> str:
+        return self.__nick
 
-    def update_nick(self, nick: str) -> None:
-        self.nice = nick
+    @nick.setter
+    def nick(self, value) -> None:
+        if not isinstance(value, Chat):
+            return
+        self.__nick = self.__nick_from_chat(value)
 
 class UserData(DatingForm):
     def __init__(self, data: Chat):

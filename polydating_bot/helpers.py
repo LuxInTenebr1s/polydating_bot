@@ -2,7 +2,9 @@ import inspect
 import yaml
 import configparser
 import logging
-from typing import Union, Dict
+from typing import Union, Dict, Optional
+
+from collections.abc import MutableMapping
 
 from telegram.ext import Dispatcher
 from telegram import (
@@ -11,19 +13,56 @@ from telegram import (
     TelegramError,
 )
 
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
+)
+
 logger = logging.getLogger(__name__)
 
-def get_chat(id: Union[id, str]) -> Chat:
-    bot = Dispatcher.get_instance()
+class IdList(MutableMapping):
+    def __init__(self, name: str, *args: Union[int, str]):
+        self.__name = name
+        self.__list = list()
+        self.__list.extend(list(args))
+
+    def __iter__(self):
+        return self.__list
+
+    def __len__(self):
+        return len(self.__list)
+
+    def __getitem__(self, i):
+        return self.__list[i]
+
+    def __setitem__(self, i, val):
+        id = get_chat_id(val)
+        if id:
+            logger.info(f"New id added to \'{self.__name}'\' list: {id}")
+            self.__list[i] = id
+
+    def __delitem__(self, i):
+        del self.__list[i]
+
+    def insert(self, i, val):
+        id = get_chat_id(val)
+        if id:
+            logger.info(f"New id added to \'{self.__name}'\' list: {id}")
+            self.__list.insert(i, id)
+
+    def append(self, val):
+        self.insert(self.__len__(), val)
+
+    def __str__(self):
+        return str(self.__list)
+
+def get_chat_id(id: Union[str, int]) -> Optional[int]:
+    bot: Bot = Dispatcher.get_instance().bot
     if isinstance(id, int) or isinstance(id, str) and '@' in id:
         try:
-            return Bot.getChat(bot, id)
-        except TelegramError as exc:
-            raise TypeError(f"Couldn\'n get chat: {id}") from exc
-
-def check_chat_id(id: Union[id, str]) -> int:
-    chat = get_chat(id)
-    return chat.id if chat else None
+            return bot.get_chat(id).id
+        except TelegramError:
+            logger.warning(f'Couldn\'t get chat id: {id}')
+    return None
 
 def get_property_object(obj: object, attr: str) -> property:
     assert not attr.startswith('_')

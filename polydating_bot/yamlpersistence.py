@@ -1,4 +1,9 @@
 import yaml
+try:
+    from yaml import CLoader, CDumper as Loader, Dumper
+except ImportError:
+    from yaml import Loader, Dumper
+
 import os
 import logging
 
@@ -9,16 +14,19 @@ from typing import Any, DefaultDict, Dict, Optional, Tuple
 from telegram.ext import BasePersistence
 from telegram.utils.types import ConversationDict
 
+import config
+import userdata
+
 USER_DIRECTORY = "user"
 CHAT_DIRECTORY = "chat"
 CONV_DIRECTORY = "conversation"
+BOT_DIRECTORY  = "bot"
 
-BOT_FILENAME = "bot_data.yaml"
+DATA_FILENAME = "data.yaml"
 
 logger = logging.getLogger(__name__)
 
 class YamlPersistence(BasePersistence):
-
     def __init__(
         self,
         directory: str,
@@ -39,18 +47,22 @@ class YamlPersistence(BasePersistence):
         self.bot_data: Optional[Dict] = None
         self.conversations: Optional[Dict[str, Dict[Tuple, Any]]] = None
 
-    @staticmethod
-    def get_filename(id: int, data: Dict) -> str:
-        if 'hr_id' in data:
-            return f'{id}_{data["hr_id"]}.yaml'
-        else:
-            return f'{id}_none.yaml'
+    def __chat_filename(self, id: int, data: Dict[int, Any]) -> str:
+        return os.path.join(self.directory, CHAT_DIRECTORY,
+                            f'{id}_{data[id].nick}', f'data.yaml')
+
+    def __user_filename(self, id: int, data: Dict[int, Any]) -> str:
+        return os.path.join(self.directory, USER_DIRECTORY,
+                            f'{id}_{data[id].nick}', f'data.yaml')
+
+    def __bot_filename(self) -> str:
+        return os.path.join(self.directory, BOT_DIRECTORY, DATA_FILENAME)
 
     @staticmethod
-    def load_file(filename: str) -> Any:
+    def __load_file(filename: str) -> Any:
         try:
             with open(filename, "r") as file:
-                return yaml.load(file)
+                return yaml.load(file, Loader=Loader)
         except OSError:
             return None
         except yaml.YAMLError as exc:
@@ -63,22 +75,23 @@ class YamlPersistence(BasePersistence):
             raise TypeError(f'Something went wrong loading {filename}') from exc
 
     @staticmethod
-    def load_directory(directory: str) -> Any:
-        data = defaultdict(dict)
+    def __load_directory(directory: str) -> Dict:
+        data = defaultdict()
         if not os.path.exists(directory):
             return data
 
-        for filename in os.listdir(directory):
-            id = filename.split('_')[0]
-            path = os.path.join(directory, filename)
-            data[int(id)] = YamlPersistence.load_file(path)
+        logger.debug(f'Files found in \'{directory}\':')
+        for path in os.listdir(directory):
+            id = path.split('_')[0]
+            path = os.path.join(directory, path, f'data.yaml')
+            data[int(id)] = YamlPersistence.__load_file(path)
+            logger.debug(f'\t{path}')
 
-        logger.info(f"directory loaded: {filename}\n{data}")
+        logger.info(f'Directory loaded successfully: {directory}')
         return data
 
     @staticmethod
-    def dump_file(filename: str, data: Any) -> None:
-        logger.info(f'dump now: {filename} \n data: {data}')
+    def __dump_file(filename: str, data: Any) -> None:
         directory = os.path.dirname(filename)
         if not os.path.exists(directory):
             try:
@@ -87,12 +100,12 @@ class YamlPersistence(BasePersistence):
                 raise TypeError(f"Couldn't make path: {directory}") from exc
 
         with open(filename, "w") as file:
-            yaml.dump(data, file)
+            yaml.dump(data, file, Dumper=Dumper)
 
     def get_chat_data(self) -> DefaultDict[int, Dict[Any, Any]]:
         if not self.chat_data:
             pathname = os.path.join(self.directory, CHAT_DIRECTORY)
-            self.chat_data = self.load_directory(pathname)
+            self.chat_data = self.__load_directory(pathname)
 
         return deepcopy(self.chat_data)
 
@@ -102,15 +115,13 @@ class YamlPersistence(BasePersistence):
         self.user_data[chat_id] = data
 
         if not self.on_flush:
-            filename = self.get_filename(chat_id, data)
-            path = os.path.join(self.directory, CHAT_DIRECTORY, filename)
-            self.dump_file(path, data)
+            path = self.__chat_filename(chat_id, data)
+            self.__dump_file(path, data)
 
     def get_user_data(self) -> DefaultDict[int, Dict[Any, Any]]:
-        logger.info("get user")
         if not self.user_data:
             pathname = os.path.join(self.directory, USER_DIRECTORY)
-            self.user_data = self.load_directory(pathname)
+            self.user_data = self.__load_directory(pathname)
 
         return deepcopy(self.user_data)
 
@@ -121,14 +132,12 @@ class YamlPersistence(BasePersistence):
         self.user_data[user_id] = data
 
         if not self.on_flush:
-            filename = self.get_filename(user_id, data)
-            path = os.path.join(self.directory, USER_DIRECTORY, filename)
-            self.dump_file(path, data)
+            path = self.__user_filename(id, data)
+            self.__dump_file(path, data)
 
     def get_bot_data(self) -> Dict[Any, Any]:
         if not self.bot_data:
-            filename = os.path.join(self.directory, BOT_FILENAME)
-            data = self.load_file(filename)
+            data = self.__load_file(self.__bot_filename())
             if not data:
                 data = dict()
             self.bot_data = data
@@ -141,28 +150,26 @@ class YamlPersistence(BasePersistence):
         self.bot_data = data
 
         if not self.on_flush:
-            self.dump_file(os.path.join(self.directory, BOT_FILENAME), data)
+            self.__dump_file(self.__bot_filename(), data)
 
     def get_conversations(self, name: str) -> ConversationDict:
-        return None
+        pass
 
     def update_conversation(
         self, name: str, key: Tuple[int, ...], new_state: Optional[object]
     ) -> None:
-        return
+        pass
 
     def flush(self) -> None:
-        for id, data in self.user_data.items():
-            filename = self.get_filename(id, data)
-            path = os.path.join(self.directory, USER_DIRECTORY, filename)
-            self.dump_file(path, data)
+        for _, id in enumerate(self.user_data):
+            data = self.user_data
+            self.__dump_file(self.__user_filename(id, data), data)
 
-        for id, data in self.chat_data.items():
-            filename = self.get_filename(id, data)
-            path = os.path.join(self.directory, CHAT_DIRECTORY, filename)
-            self.dump_file(path, data)
+        for _, id in enumerate(self.chat_data):
+            data = self.chat_data
+            self.__dump_file(self.__chat_filename(id, data), data)
 
         if self.bot_data:
-            path = os.path.join(self.directory, BOT_FILENAME)
-            self.dump_file(path, self.bot_data)
+            data = self.bot_data
+            self.__dump_file(self.__bot_filename(), data)
 

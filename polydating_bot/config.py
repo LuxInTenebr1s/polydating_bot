@@ -1,9 +1,6 @@
 import logging
-from os import (
-    path,
-    curdir,
-    listdir,
-)
+import os
+
 from typing import Dict, AnyStr, Mapping, Any
 
 from configparser import ConfigParser
@@ -23,9 +20,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 #TODO: fix those variables
-ROOT = f"{path.expanduser('~/git/pets/polydating-bot')}"
-DEFAULT_CONFIG_DIR = f"{path.join(ROOT, 'config')}"
-DEFAULT_PERSIST_DIR = f"{path.join(ROOT, 'tmp')}"
+ROOT = f"{os.path.expanduser('~/git/pets/polydating-bot')}"
+DEFAULT_CONFIG_DIR = f"{os.path.join(ROOT, 'config')}"
+DEFAULT_PERSIST_DIR = f"{os.path.join(ROOT, 'tmp')}"
 
 class BotConfigMeta(type):
     def __init__(cls, *args, **kwargs):
@@ -50,12 +47,14 @@ class BotConfigMeta(type):
 
     @config_dir.setter
     def config_dir(cls, value: str) -> None:
-        value = path.normpath(value)
-        if path.exists(value):
-            cls.__config_dir = value
-        else:
-            logger.error((f'Couldn\'t find configuration directory: {value}\n',
-                          f'Switching to default directory: {cls.__config_dir}',))
+        path = str()
+        try:
+            path = os.path.normpath(value)
+            os.mkdir(path)
+            cls.__config_dir = path
+        except OSError:
+            logger.error(f'Couldn\'t find configuration directory: {value}')
+            logger.info(f'Switching to default directory: {cls.__config_dir}')
 
     @property
     def persist_dir(cls) -> str:
@@ -63,12 +62,12 @@ class BotConfigMeta(type):
 
     @persist_dir.setter
     def persist_dir(cls, value: str) -> None:
-        value = path.normpath(value)
-        if path.exists(value):
+        path = os.path.normpath(value)
+        if os.path.exists(path):
             cls.__config_dir = value
         else:
-            logger.error((f'Couldn\'t find persistence directory: {value}\n',
-                          f'Switching to default directory: {cls.__persist_dir}',))
+            logger.error(f'Couldn\'t find persistence directory: {path}')
+            logger.info(f'Switching to default directory: {cls.__persist_dir}')
 
     @property
     def loglevel(cls) -> int:
@@ -81,8 +80,8 @@ class BotConfigMeta(type):
             cls.__loglevel = level
 
 class BotConfig(metaclass=BotConfigMeta):
-    def __init__(self):
-        cls = self.__class__
+    @classmethod
+    def update(cls):
         args = helpers.dict_strip(vars(cls.__parse_args()))
 
         config_dir = args.get('config_dir')
@@ -90,10 +89,11 @@ class BotConfig(metaclass=BotConfigMeta):
             cls.config_dir = config_dir
 
         config = helpers.dict_strip(cls.__parse_config(cls.config_dir))
-        logger.info(f'{args}\n{config}')
         args.update(config)
 
         cls.__update(args)
+        if not cls.token:
+            raise ValueError(f'No \'token\' value is provided')
 
     @classmethod
     def __update(cls, conf: Dict[str, Any]) -> None:
@@ -110,16 +110,16 @@ class BotConfig(metaclass=BotConfigMeta):
             with open(filename, 'r') as file:
                 return file.read()
         except OSError as exc:
-            raise TypeError(f'Incorrect token filename: {filename}') from exc
+            raise ValueError(f'Incorrect token filename: {filename}') from exc
 
     @classmethod
     def __parse_config(cls, pathname: str) -> Dict:
-        for filename in listdir(pathname):
+        for filename in os.listdir(pathname):
             if filename.endswith('.ini'):
                 break
 
         config = ConfigParser(allow_no_value=True)
-        config.read(path.join(pathname, filename))
+        config.read(os.path.join(pathname, filename))
         config = config._sections
 
         if 'Common' in config:
@@ -153,7 +153,7 @@ class BotConfig(metaclass=BotConfigMeta):
             else:
                 return {}
         except ArgumentError as exc:
-            raise TypeError((f"Incorrect arguments. See help.\n\n",
+            raise ValueError((f"Incorrect arguments. See help.\n\n",
                              f"{'ArgumentParser.print_help()'}",)) from exc
         except ArgumentTypeError as exc:
             raise TypeError(f'types failed') from exc

@@ -6,6 +6,7 @@ import html
 import json
 import logging
 import traceback
+from uuid import uuid4
 
 from telegram import Update, ParseMode
 from telegram.ext import (
@@ -19,6 +20,8 @@ from telegram.ext import (
 
 import helpers
 import yamlpersistence
+import botdata
+from config import BotConfig as config
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -26,7 +29,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-def start(update: Update, context: CallbackContext) -> None:
+def debug(update: Update, context: CallbackContext) -> None:
     message = (
         f'<pre>update = {html.escape(json.dumps(update.to_dict(), indent=2, ensure_ascii=False))}'
         '</pre>\n\n'
@@ -37,8 +40,16 @@ def start(update: Update, context: CallbackContext) -> None:
     )
     update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
 
+def start(update: Update, context: CallbackContext) -> None:
+    logger.info(f'{update.message.text}')
+    try:
+        data: botdata.BotData = context.bot_data['data']
+        data.owner = (context.args[0], update.message.chat.id)
+    except:
+        pass
+
 def put(update: Update, context: CallbackContext) -> None:
-    context.user_data["data"] = update.message.text.partition(' ')[2]    
+    context.user_data["data"] = update.message.text.partition(' ')[2]
 
 def get(update: Update, context: CallbackContext) -> None:
     message = (
@@ -48,15 +59,19 @@ def get(update: Update, context: CallbackContext) -> None:
     update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
 
 def main():
-    helpers.parse_arg()
+    config.update()
+    persistence = yamlpersistence.YamlPersistence(directory=config.persist_dir)
 
-    form = helpers.parse_form()
-    for idx,que in enumerate(form['questionnaire']):
-        logger.info('%d: %s', idx, que)
-
-    updater = helpers.parse_config('config/default.ini')
-
+    updater = Updater(config.token, persistence=persistence)
     dispatcher = updater.dispatcher
+    logger.info(f'Dispatcher is created.')
+
+    bot_data = dispatcher.bot_data.get('data')
+    if not bot_data:
+        bot_data = botdata.BotData(str(uuid4()))
+        dispatcher.bot_data['data'] = bot_data
+        dispatcher.update_persistence()
+    logger.info(f'Current bot UUID: {bot_data.uuid}')
 
     dispatcher.add_handler(CommandHandler('start', start), 1)
     dispatcher.add_handler(CommandHandler('put', put, Filters.chat_type.private))
