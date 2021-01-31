@@ -11,10 +11,6 @@ from telegram import (
 import config
 import helpers
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
-)
-
 logger = logging.getLogger(__name__)
 
 class BotData():
@@ -65,7 +61,7 @@ class BotData():
         id = helpers.get_chat_id(value)
         if id:
             logger.info(f'Adding new dating channel: {id}')
-            self.__dating_channel = chat_id
+            self.__dating_channel = id
 
     @dating_channel.deleter
     def dating_channel(self) -> None:

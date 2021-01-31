@@ -1,9 +1,6 @@
 import inspect
-import yaml
-import configparser
 import logging
 from typing import Union, Dict, Optional
-
 from collections.abc import MutableMapping
 
 from telegram.ext import Dispatcher
@@ -11,10 +8,6 @@ from telegram import (
     Chat,
     Bot,
     TelegramError,
-)
-
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
 )
 
 logger = logging.getLogger(__name__)
@@ -86,3 +79,11 @@ def dict_strip(data: Dict) -> Dict:
     for key in keys:
         del data[key]
     return data
+
+def nick_from_chat(chat: Chat) -> str:
+    if chat.username:
+        return f'@{chat.username}'
+    else:
+        return f'{chat.first_name} {chat.last_name}'
+
+

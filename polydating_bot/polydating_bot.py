@@ -2,61 +2,21 @@
 # pylint: disable=W0613, C0116
 # type: ignore[union-attr]
 
-import html
-import json
 import logging
-import traceback
 from uuid import uuid4
 
-from telegram import Update, ParseMode
-from telegram.ext import (
-    Updater,
-    CommandHandler,
-    MessageHandler,
-    Filters,
-    ConversationHandler,
-    CallbackContext,
-)
+from telegram.ext import Updater, Dispatcher
 
-import helpers
-import yamlpersistence
 import botdata
+import yamlpersistence
+import private
 from config import BotConfig as config
 
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG
 )
 
 logger = logging.getLogger(__name__)
-
-def debug(update: Update, context: CallbackContext) -> None:
-    message = (
-        f'<pre>update = {html.escape(json.dumps(update.to_dict(), indent=2, ensure_ascii=False))}'
-        '</pre>\n\n'
-        f'<pre>user_data = {html.escape(json.dumps(context.user_data, indent=2, ensure_ascii=False))}'
-        '</pre>\n\n'
-        f'<pre>chat_data = {html.escape(json.dumps(context.chat_data, indent=2, ensure_ascii=False))}'
-        '</pre>\n\n'
-    )
-    update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
-
-def start(update: Update, context: CallbackContext) -> None:
-    logger.info(f'{update.message.text}')
-    try:
-        data: botdata.BotData = context.bot_data['data']
-        data.owner = (context.args[0], update.message.chat.id)
-    except:
-        pass
-
-def put(update: Update, context: CallbackContext) -> None:
-    context.user_data["data"] = update.message.text.partition(' ')[2]
-
-def get(update: Update, context: CallbackContext) -> None:
-    message = (
-        f'<pre>user_data = {html.escape(json.dumps(context.user_data, indent=2, ensure_ascii=False))}'
-        '</pre>\n\n'
-    )
-    update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
 
 def main():
     config.update()
@@ -73,10 +33,7 @@ def main():
         dispatcher.update_persistence()
     logger.info(f'Current bot UUID: {bot_data.uuid}')
 
-    dispatcher.add_handler(CommandHandler('start', start), 1)
-    dispatcher.add_handler(CommandHandler('put', put, Filters.chat_type.private))
-    dispatcher.add_handler(CommandHandler('get', get, Filters.chat_type.private))
-
+    private.add_private_commands(dispatcher)
     updater.start_polling()
 
     updater.idle()

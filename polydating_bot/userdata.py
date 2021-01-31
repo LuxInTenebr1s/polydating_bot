@@ -1,23 +1,18 @@
 from collections import defaultdict
-from typing import Dict
+from typing import Dict, Optional
 
 from telegram import Chat, TelegramObject
+
+import helpers
 
 class DatingForm(TelegramObject):
     def __init__(self, chat: Chat):
         self.__name: str
         self.__age: int
         self.__place: str
-        self.__nick: str = self.__nick_from_chat(chat)
+        self.__nick: str = helpers.nick_from_chat(chat)
 
-        self.answers: Dict[str, str] = defaultdict(str)
-
-    @staticmethod
-    def __nick_from_chat(chat: Chat) -> str:
-        if chat.username:
-            return f'@{chat.username}'
-        else:
-            return f'{chat.first_name} {chat.last_name}'
+        self.answers: Optional[Dict[str, str]] = None
 
     @property
     def age(self) -> int:

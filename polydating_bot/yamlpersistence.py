@@ -14,9 +14,6 @@ from typing import Any, DefaultDict, Dict, Optional, Tuple
 from telegram.ext import BasePersistence
 from telegram.utils.types import ConversationDict
 
-import config
-import userdata
-
 USER_DIRECTORY = "user"
 CHAT_DIRECTORY = "chat"
 CONV_DIRECTORY = "conversation"
@@ -47,13 +44,16 @@ class YamlPersistence(BasePersistence):
         self.bot_data: Optional[Dict] = None
         self.conversations: Optional[Dict[str, Dict[Tuple, Any]]] = None
 
-    def __chat_filename(self, id: int, data: Dict[int, Any]) -> str:
+    def __chat_filename(self, id: int, data: Dict[int, Dict]) -> str:
+        chat = data[id]['data']
+        logger.debug(f'chat data is: {chat}')
         return os.path.join(self.directory, CHAT_DIRECTORY,
-                            f'{id}_{data[id].nick}', f'data.yaml')
+                            f'{id}_{chat.name}', f'data.yaml')
 
     def __user_filename(self, id: int, data: Dict[int, Any]) -> str:
+        user = data[id]['data']
         return os.path.join(self.directory, USER_DIRECTORY,
-                            f'{id}_{data[id].nick}', f'data.yaml')
+                            f'{id}_{user.nick}', f'data.yaml')
 
     def __bot_filename(self) -> str:
         return os.path.join(self.directory, BOT_DIRECTORY, DATA_FILENAME)
@@ -76,7 +76,7 @@ class YamlPersistence(BasePersistence):
 
     @staticmethod
     def __load_directory(directory: str) -> Dict:
-        data = defaultdict()
+        data = defaultdict(dict)
         if not os.path.exists(directory):
             return data
 
@@ -110,12 +110,13 @@ class YamlPersistence(BasePersistence):
         return deepcopy(self.chat_data)
 
     def update_chat_data(self, chat_id: int, data: Dict) -> None:
+        logger.debug(f'Update chat data: {chat_id}: {data}')
         if self.chat_data.get(chat_id) == data:
             return
-        self.user_data[chat_id] = data
+        self.chat_data[chat_id] = data
 
         if not self.on_flush:
-            path = self.__chat_filename(chat_id, data)
+            path = self.__chat_filename(chat_id, self.chat_data)
             self.__dump_file(path, data)
 
     def get_user_data(self) -> DefaultDict[int, Dict[Any, Any]]:
@@ -126,13 +127,13 @@ class YamlPersistence(BasePersistence):
         return deepcopy(self.user_data)
 
     def update_user_data(self, user_id: int, data: Dict) -> None:
-        logger.info("update user")
+        logger.debug(f'Update user data: {user_id}: {data}')
         if self.user_data.get(user_id) == data:
             return
         self.user_data[user_id] = data
 
         if not self.on_flush:
-            path = self.__user_filename(id, data)
+            path = self.__user_filename(user_id, self.user_data)
             self.__dump_file(path, data)
 
     def get_bot_data(self) -> Dict[Any, Any]:
@@ -163,11 +164,11 @@ class YamlPersistence(BasePersistence):
     def flush(self) -> None:
         for _, id in enumerate(self.user_data):
             data = self.user_data
-            self.__dump_file(self.__user_filename(id, data), data)
+            self.__dump_file(self.__user_filename(id, data), data[id])
 
         for _, id in enumerate(self.chat_data):
             data = self.chat_data
-            self.__dump_file(self.__chat_filename(id, data), data)
+            self.__dump_file(self.__chat_filename(id, data), data[id])
 
         if self.bot_data:
             data = self.bot_data
