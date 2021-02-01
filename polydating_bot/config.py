@@ -60,7 +60,7 @@ class BotConfigMeta(type):
     def persist_dir(cls, value: str) -> None:
         path = os.path.normpath(value)
         if os.path.exists(path):
-            cls.__config_dir = value
+            cls.__persist_dir = value
         else:
             logger.error(f'Couldn\'t find persistence directory: {path}')
             logger.info(f'Switching to default directory: {cls.__persist_dir}')

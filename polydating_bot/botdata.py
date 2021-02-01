@@ -1,6 +1,16 @@
+from __future__ import annotations
+
+import os
 import logging
 from typing import List, Dict, Union, Optional, Tuple
 
+import yaml
+try:
+    from yaml import CLoader, CDumper as Loader, Dumper
+except ImportError:
+    from yaml import Loader, Dumper
+
+from telegram.ext import CallbackContext
 from telegram import (
     TelegramObject,
     Bot,
@@ -24,6 +34,13 @@ class BotData():
 
     def __init__(self, uuid: str):
         self.__uuid = uuid
+
+        try:
+            path = os.path.join(config.BotConfig.config_dir, 'dating-form.yaml')
+            with open(path) as file:
+                self.__questions = yaml.load(file, Loader=Loader)
+        except Exception as exc:
+            raise ValueError(f'No dating questions found: {exc}') from exc
 
     @property
     def uuid(self) -> str:
@@ -74,3 +91,12 @@ class BotData():
     @questions.setter
     def questions(self, value: Dict[str, str]) -> None:
         self.__questions = value
+
+    @classmethod
+    def from_context(cls, context: CallbackContext) -> BotData:
+        return context.bot_data.get('data', None)
+
+    def question_tag_from_idx(self, idx: int) -> str:
+        if not 0 <= idx < len(self.questions):
+            raise IndexError('Index is out of range')
+        return list(self.__questions.items())[idx][0]
