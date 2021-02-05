@@ -5,8 +5,8 @@ import logging
 from collections import defaultdict
 from typing import Dict, Optional
 
-from telegram import Chat, TelegramObject, Message
-from telegram.ext import CallbackContext
+from telegram import Chat, TelegramObject, Message, Bot
+from telegram.ext import CallbackContext, Dispatcher
 
 import helpers
 import config
@@ -90,36 +90,62 @@ class UserData(DatingForm):
         super().__init__(data)
         self.__msg_one: Message = None
         self.__msg_two: Message = None
+        self.__back = None
 
         self.id: int = data.id
 
+    def __get_message(self, msg: Message) -> Message:
+        if not msg:
+            bot = Dispatcher.get_instance().bot
+            msg = bot.send_message(self.id, text='None')
+        return msg
+
+    def __set_message(self, old_msg: Message, msg: Optional[Message, bool]) -> Message:
+        if msg != True and old_msg != msg:
+            if old_msg:
+                logger.debug('DELETE MESSAGE')
+                old_msg.delete()
+            logger.debug('RETURN NEW MESSAGE')
+            return msg
+        else:
+            logger.debug('RETURN OLD MESSAGE')
+            return old_msg
+
     @property
     def msg_one(self) -> Message:
-        return self.__msg_one
+        return self.__get_message(self.__msg_one)
 
     @msg_one.setter
     def msg_one(self, value: Message) -> None:
-        if self.__msg_one:
-            self.__msg_one.delete()
-        self.__msg_one = value
+        self.__msg_one = self.__set_message(self.__msg_one, value)
 
     @msg_one.deleter
     def msg_one(self) -> None:
-        return self.__msg_one.delete()
+        if self.__msg_one:
+            self.__msg_one.delete()
+            self.__msg_one = None
 
     @property
     def msg_two(self) -> Message:
-        return self.__msg_two
+        return self.__get_message(self.__msg_two)
 
     @msg_two.setter
     def msg_two(self, value: Message) -> None:
-        if self.__msg_two:
-            self.__msg_two.delete()
-        self.__msg_two = value
+        self.__msg_two = self.__set_message(self.__msg_two, value)
 
     @msg_two.deleter
     def msg_two(self) -> None:
-        return self.__msg_two.delete()
+        if self.__msg_two:
+            self.__msg_two.delete()
+            self.__msg_two = None
+
+    @property
+    def back(self):
+        return self.__back
+
+    @back.setter
+    def back(self, value) -> None:
+        self.__back = value
 
     @staticmethod
     def from_context(context: CallbackContext) -> Optional[UserData]:

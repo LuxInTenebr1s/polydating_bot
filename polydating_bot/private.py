@@ -2,6 +2,7 @@ import logging
 import html
 import json
 import traceback
+import decorator
 
 from telegram import (
     Bot,
@@ -31,9 +32,19 @@ SELECT_LEVEL, SELECT_ACTION, ANSWER_QUESTION, APPEND_FILES, APPEND_PHOTOS, APPEN
 REPLY_AGE, REPLY_NAME, REPLY_PLACE = range(15, 18)
 logger = logging.getLogger(__name__)
 
+#BACK_MAP = {ANSWER_QUESTION: edit_form, EDIT_FORM: manage_form, APPEND_FILES: edit_form, APPEND_PHOTOS: append_files}
+#
 #order = [
 #    SELECT_ACTION,
 #    [ SHOW_HELP, [EDIT_FORM, MANAGE_FORM, ]
+
+@decorator.decorator
+def back(func, f=None, *args, **kwargs):
+    user_data = UserData.from_context(args[1])
+    user_data.back = f
+    user_data.update_context(args[1])
+
+    return func(*args, *kwargs)
 
 def debug(update: Update, context: CallbackContext) -> None:
     message = (
@@ -46,8 +57,25 @@ def debug(update: Update, context: CallbackContext) -> None:
     )
     update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
 
-def stop(update: Updater, context: CallbackContext) -> None:
+def stop(update: Update, context: CallbackContext) -> None:
     pass
+
+HELP = str().join(
+        (f'Привет! Я бот, который поможет тебе создать и опубликовать собственную ',
+        f'анкету.\n\n',
+        f'Для начала попробуй её заполнить: прочитай правила, ответь на вопросы и ',
+        f'прикрепи файлы (фото и аудио).\n\n',
+        f'После этого воспользуйся разделом \'Управление анкетой\' и отправь ',
+        f'заполненную анкету админам @PolyDatings. Анкета будет проверена на ',
+        f'предмет соблюдения правил и опубликована в канале.\n\n',
+        f'Анкета и все твои данные могут быть удалены в любой момент: используй ',
+        f'команду /delete или выбери опцию \'Удалить анкету\' в разделе ',
+        f'\'Управление анкетой\'.\n\n',
+        f'Список доступных команд:\n',
+        f'/start - возвращение в начало\n',
+        f'/впистуябольшенепридумла - хех)0)',
+    )
+).translate(str.maketrans({'.': r'\.', '!': r'\!', '(': r'\(', ')': r'\)', '-': r'\-'}))
 
 def start(update: Update, context: CallbackContext) -> None:
     logger.debug(f'{update.message.text}')
@@ -60,6 +88,10 @@ def start(update: Update, context: CallbackContext) -> None:
     except:
         pass
 
+    update.message.reply_text(text=HELP, parse_mode=ParseMode.MARKDOWN_V2)
+    return select_level(update, context)
+
+def select_level(update: Update, context: CallbackContext) -> None:
     text = (
         'Для работы с ботом выберите один из вариантов:'
     )
@@ -74,12 +106,16 @@ def start(update: Update, context: CallbackContext) -> None:
     ]
     keyboard = InlineKeyboardMarkup(buttons)
 
-    update.message.reply_text(
-        'Привет! Попробуй воспользоваться моим ботом и отправь свою анкету.'
-    )
-    update.message.reply_text(text=text, reply_markup=keyboard)
+    if update.callback_query:
+        update.callback_query.answer()
+
+    user_data = UserData.from_context(context)
+    user_data.msg_one = user_data.msg_one.edit_text(text=text,
+                                                    reply_markup=keyboard)
+    del user_data.msg_two
     return SELECT_LEVEL
 
+@back(f=select_level)
 def edit_form(update: Update, context: CallbackContext) -> None:
     text = (
         'Ответьте на вопросы анкеты или прикрепите файлы (фото и аудио)'
@@ -96,12 +132,17 @@ def edit_form(update: Update, context: CallbackContext) -> None:
     keyboard = InlineKeyboardMarkup(buttons)
 
     update.callback_query.answer()
-    update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+
+    user_data = UserData.from_context(context)
+    user_data.msg_one = user_data.msg_one.edit_text(text=text,
+                                                    reply_markup=keyboard)
+    del user_data.msg_two
     return SELECT_ACTION
 
 def save_answer(update: Update, context: CallbackContext) -> None:
     user_data = UserData.from_context(context)
     bot_data = BotData.from_context(context)
+
     reply = update.message.text
 
     if user_data.current_question == UserData.NAME:
@@ -114,9 +155,10 @@ def save_answer(update: Update, context: CallbackContext) -> None:
         tag = bot_data.question_tag_from_idx[user_data.current_question]
         user_data.answers[tag] = reply
 
+    del user_data.msg_one
+    del user_data.msg_two
     user_data.current_question += 1
-    ask_question(update, context)
-    return ANSWER_QUESTION
+    return ask_question(update, context)
 
 def shift_question(update: Update, context: CallbackContext):
     user_data = UserData.from_context(context)
@@ -127,15 +169,14 @@ def shift_question(update: Update, context: CallbackContext):
     else:
         logger.error(f'Incorrect state! IT SHOULD NEVER HAPPEN!')
         raise ValueError(f'Incorrect converstation state: {update.callback_query.data}')
+    return ask_question(update, context)
 
-    ask_question(update, context)
-    return ANSWER_QUESTION
-
+@back(f=edit_form)
 def ask_question(update: Update, context: CallbackContext) -> None:
     user_data = UserData.from_context(context)
     bot_data = BotData.from_context(context)
 
-    text = ['', 'Нет ответа',]
+    text = ['', 'Нет ответа']
     if user_data.current_question == UserData.NAME:
         text[0] = 'Как Вас зовут?'
         if user_data.name:
@@ -169,11 +210,11 @@ def ask_question(update: Update, context: CallbackContext) -> None:
         update.callback_query.answer()
 
     text[0] = text[0].translate(str.maketrans({'_': r'\_', '*': r'\*'}))
-    logger.debug(f'Question: *{text[0]}*')
-    user_data.msg_one = context.bot.send_message(user_data.id, f'*{text[0]}*',
-                                                 parse_mode=ParseMode.MARKDOWN_V2)
-    user_data.msg_two = context.bot.send_message(user_data.id, text[1],
-                                                 reply_markup=keyboard)
+    user_data.msg_one = user_data.msg_one.edit_text(f'*{text[0]}*',
+                                      parse_mode=ParseMode.MARKDOWN_V2)
+    user_data.msg_two = user_data.msg_two.edit_text(text[1],
+                                      reply_markup=keyboard)
+    user_data.current_state = ANSWER_QUESTION
     return ANSWER_QUESTION
 
 def test(update: Update, context: CallbackContext):
@@ -185,7 +226,11 @@ def manage_form(update: Update, context: CallbackContext):
 def show_help(update: Update, context: CallbackContext):
     return STOP
 
+@back(f=edit_form)
 def append_files(update: Update, context: CallbackContext):
+    text = (
+        f'Выбери тип файла, который ты хочешь прикрепить:'
+    )
     buttons = [
         [
             InlineKeyboardButton(text='Добавить фото', callback_data=str(APPEND_PHOTOS)),
@@ -198,20 +243,31 @@ def append_files(update: Update, context: CallbackContext):
     keyboard = InlineKeyboardMarkup(buttons)
 
     update.callback_query.answer()
-    update.callback_query.edit_message_reply_markup(keyboard)
 
+    user_data = UserData.from_context(context)
+    user_data.msg_one = user_data.msg_one.edit_text(text=text,
+                                                    reply_markup=keyboard)
+    del user_data.msg_two
     return SELECT_ACTION
 
+@back(f=append_files)
 def append_sound(update: Update, context: CallbackContext):
     return STOP
 
+@back(f=append_files)
 def append_photos(update: Update, context: CallbackContext):
     text = (
         'Прикрепите до пяти (5) фото одним сообщением.'
     )
-    update.callback_query.answer()
-    update.callback_query.edit_message_text(text=text)
+    button = InlineKeyboardButton(text='Назад', callback_data=str(BACK))
+    keyboard = InlineKeyboardMarkup.from_button(button)
 
+    update.callback_query.answer()
+
+    user_data = UserData.from_context(context)
+    user_data.msg_one = user_data.msg_one.edit_text(text=text,
+                                                    reply_markup=keyboard)
+    del user_data.msg_two
     return APPEND_PHOTOS
 
 def save_photos(update: Update, context: CallbackContext):
@@ -221,25 +277,13 @@ def save_photos(update: Update, context: CallbackContext):
         logger.info(f'Downloading photo: {photo}')
         photo.get_file().download(custom_path=f'{user_data.directory()}/photo{idx}')
 
-    append_files(update, context)
-    return SELECT_ACTION
+    return append_files(update, context)
+
+def get_back(update: Update, context: CallbackContext) -> None:
+    user_data = UserData.from_context(context)
+    return user_data.back(update, context)
 
 def add_private_commands(dispatcher: Dispatcher) -> None:
-#    edit_form_conv = ConversationHandler(
-#        entry_points=[CallbackQueryHandler(editing_form,
-#                                           pattern=f'^{EDIT_FORM}$')],
-#        states={
-#            EDIT_FORM: [
-#                CallbackQueryHandler(answer_questions,
-#                                     pattern=f'^{ANSWER_QUESTIONS}$'),
-#            ],
-#        },
-#        fallbacks=[CommandHandler('stop', stop)],
-#    )
-
-##    selection_handlers = (
-##            edit_form_conv,
-##    )
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
@@ -261,11 +305,11 @@ def add_private_commands(dispatcher: Dispatcher) -> None:
             APPEND_PHOTOS: [
                 MessageHandler(Filters.photo, save_photos),
             ],
-#            DESCRIBE_SELF: [
-#
-#            ],
         },
-        fallbacks=[CommandHandler('stop', stop)],
+        fallbacks=[
+            CommandHandler('stop', stop),
+            CallbackQueryHandler(get_back, pattern=f'^{BACK}$'),
+        ],
     )
 
     dispatcher.add_handler(conv_handler)
