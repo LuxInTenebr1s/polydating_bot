@@ -1,17 +1,18 @@
 #!/usr/bin/env python
-# pylint: disable=W0613, C0116
+# pylint: disable=W0613, C0116, W1203
 # type: ignore[union-attr]
 
 import logging
 from uuid import uuid4
 
-from telegram.ext import Updater, Dispatcher
+from telegram.ext import Updater
 
 import botdata
 import userdata
 import yamlpersistence
 import private
-from config import BotConfig as config
+
+from .config import BotConfig as config
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG
@@ -25,7 +26,7 @@ def main():
 
     updater = Updater(config.token, persistence=persistence)
     dispatcher = updater.dispatcher
-    logger.info(f'Dispatcher is created.')
+    logger.info('Dispatcher is created.')
 
     bot_data = dispatcher.bot_data.get('data')
     if not bot_data:

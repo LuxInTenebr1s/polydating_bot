@@ -1,8 +1,16 @@
+#!/usr/bin/env python3
+
 from __future__ import annotations
 
 import os
 import logging
-from typing import List, Dict, Union, Optional, Tuple
+
+from typing import (
+    Dict,
+    Union,
+    Optional,
+    Tuple
+)
 
 import yaml
 try:
@@ -10,7 +18,9 @@ try:
 except ImportError:
     from yaml import Loader, Dumper
 
-from telegram.ext import CallbackContext
+from telegram.ext import (
+    CallbackContext
+)
 from telegram import (
     TelegramObject,
     Bot,
@@ -18,12 +28,14 @@ from telegram import (
     TelegramError,
 )
 
+from .. import dating
+from . import data
 import config
 import helpers
 
 logger = logging.getLogger(__name__)
 
-class BotData():
+class BotData(data.Data):
     __uuid: str = str()
     __owner: Optional[int] = None
     __dating_channel: Optional[int] = None
