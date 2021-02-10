@@ -10,16 +10,18 @@ from typing import (
     Dict,
     Optional,
     List,
-    Callable
+    Callable,
+    Union
 )
 
 from telegram import (
     Chat,
-    Message
+    Message,
+    File
 )
 from telegram.ext import (
     CallbackContext,
-    Dispatcher
+    Dispatcher,
 )
 
 from .. import (
@@ -37,6 +39,7 @@ class UserData(base.IdData, dating.Form):
     """User data class."""
     _KEY = 'data'
     _MSG_COUNT = 2
+    _PHOTO_COUNT = 5
 
     def __init__(self, chat: Chat):
         super().__init__(chat)
@@ -124,3 +127,29 @@ class UserData(base.IdData, dating.Form):
                         continue
                     self._msgs[idx] = self._msgs[idx].edit_text(**kwargs)
                     break
+
+    def _save_file(self, file: File) -> str:
+        file.download(custom_path=f'{self.directory()}/{file.file_unique_id}')
+        return file.file_unique_id
+
+    def _remove_photos(self) -> None:
+        for file in self._photo:
+            path = f'{self.directory()}/{file}'
+            try:
+                os.remove(path)
+            except OSError:
+                logger.warning(f'Couldn\'t remove file: {path}')
+        self._photo.clear()
+
+    def save_photos(self, photos: List[File]) -> None:
+        """Saves a photo to a local directory."""
+        self._remove_photos()
+        for photo in photos:
+            self._photo.append(self._save_file(photo))
+
+    def save_sound(self, sound: Union[File, str]) -> None:
+        """Saves a soundtrack to a local directory (or soundtrack name)."""
+        if isinstance(sound, File):
+            self._sound = (True, self._save_file(sound))
+        else:
+            self._sound = (False, str(sound))

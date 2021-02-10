@@ -16,7 +16,6 @@ class Data(): # pylint: disable=R0903
             logger.warning(f'Trying to evaluate different objects: {other.__class__}')
             return super.__eq__(other)
 
-        logger.debug(f'{vars(self)} and {vars(other)}')
         return vars(self) == vars(other)
 
 class IdData(Data):

@@ -106,9 +106,14 @@ HELP = (
 
 def _start(update: Update, context: CallbackContext) -> None:
     logger.debug(f'{update.message.text}')
-    UserData(update.message.chat).update_context(context)
-    context.chat_data['data'] = chatdata.ChatData(update.message.chat)
-    logger.debug(f'Created new user data: {update.message.chat.id}')
+
+    try:
+        UserData.from_context(context)
+    except IndexError:
+        UserData(update.message.chat).update_context(context)
+        context.chat_data['data'] = chatdata.ChatData(update.message.chat)
+        logger.debug(f'Created new user data: {update.message.chat.id}')
+
     try:
         bot_data = BotData.from_context(context)
         bot_data.owner = (context.args[0], update.message.chat.id)
@@ -139,8 +144,7 @@ def _select_level(update: Update, context: CallbackContext) -> None:
     return SELECT_LEVEL
 
 @_state(back=_select_level)
-def _show_help(update: Update, context: CallbackContext, udata: UserData):
-    """ Kek """
+def _show_help(update: Update, context: CallbackContext):
     text = (
         'Позже здесь появятся правила и ссылки на более другие документы:\n\n'
         'За любой помощью обращайтесь к разработчику бота: @srLuxint'
@@ -285,7 +289,7 @@ def _append_files(update: Update, context: CallbackContext):
 @_state(back=_append_files)
 def _append_sound(update: Update, context: CallbackContext):
     text = (
-        'Прикрепите саундтрек/перешлите сообщение от музыкального бота ',
+        'Прикрепите саундтрек/перешлите сообщение от музыкального бота '
         'или напишите название саундтрека.'
     )
     button = InlineKeyboardButton(text='Назад', callback_data=str(BACK))
@@ -294,6 +298,17 @@ def _append_sound(update: Update, context: CallbackContext):
     user_data = UserData.from_context(context)
     user_data.print_messages({'text': text, 'reply_markup': keyboard})
     return APPEND_SOUND
+
+def _save_sound(update: Update, context: CallbackContext):
+    user_data = UserData.from_context(context)
+
+    if update.message.audio:
+        user_data.save_sound(update.message.audio.get_file())
+    else:
+        user_data.save_sound(update.message.text)
+    user_data.update_context(context)
+
+    return _append_files(update, context)
 
 def _save_sound(update: Update, context: CallbackContext):
     return _append_files(update, context)
@@ -311,11 +326,23 @@ def _append_photos(update: Update, context: CallbackContext):
     return APPEND_PHOTOS
 
 def _save_photos(update: Update, context: CallbackContext):
+    queue = context.dispatcher.update_queue
+
+    updates = [update]
+    for _ in range(queue.qsize()):
+        updates.append(queue.get())
+
+    if len(updates) > 5:
+        return _append_photos(update, context)
+
+    photos = []
+    for upd in updates:
+        if upd.message.photo:
+            photos.append(upd.message.photo[-1].get_file())
+
     user_data = UserData.from_context(context)
-    logger.debug(f'Saving photos now: {update.message}')
-    for idx, photo in enumerate(update.message.photo):
-        logger.info(f'Downloading photo: {photo}')
-        photo.get_file().download(custom_path=f'{user_data.directory()}/photo{idx}')
+    user_data.save_photos(photos)
+    user_data.update_context(context)
 
     return _append_files(update, context)
 
@@ -361,7 +388,7 @@ def add_handlers(dispatcher: Dispatcher) -> None:
             SELECT_ACTION: select_action_handlers,
             ANSWER_QUESTION: answer_question_handlers,
             APPEND_PHOTOS: [MessageHandler(Filters.photo, _save_photos)],
-            APPEND_SOUND: [MessageHandler(Filters.all, _save_sound)],
+            APPEND_SOUND: [MessageHandler(Filters.text | Filters.audio, _save_sound)],
         },
         fallbacks=fallback_handlers
     )

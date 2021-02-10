@@ -99,11 +99,6 @@ class _ItemList(MutableSequence): # pylint: disable=R0901
         """Default insert."""
         self._items.insert(index, value)
 
-    def __eq__(self, other):
-        logger.debug('KEKEKfdsafadsfa')
-        logger.debug(f'item list: {vars(self)} and {vars(other)}')
-        super().__eq__(other)
-
 class _Question(_Item):
     def __init__(
         self,
@@ -235,25 +230,12 @@ class _AnswerList(_ItemList): # pylint: disable=R0901
             answer = _Answer(key, item)
             self._items.append(answer)
 
-#    def __getitem__(self, key) -> _Answer:
-#        for item in self._items:
-#            logger.debug(f'{key} and {item.tag} are compared.')
-#            if not item.tag == key:
-#                continue
-#            return item
-#        return None
-
-    def __eq__(self, other):
-        logger.debug(f'ans list eq: {vars(self)} and {vars(other)}')
-        super().__eq__(other)
-
     def __delitem__(self, item):
         self._items.__delitem__(item)
 
 class Form():
     """Dating form class."""
     def __init__(self, *args, **kwargs): # pylint: disable=W0613
-        logger.debug('KEKEKEKKEKEKEKEKEEKKE')
         self.answers = _AnswerList()
 
         self._photo: List[str] = []
@@ -278,14 +260,22 @@ class Form():
             if question in self.answers:
                 acount += 1
 
-        text = (
-            f'Отвечено вопросов: {acount} из {len(qlist)} (ещё {qcount} '
-            f'обязательных)\n'
-            f'Прикреплено фотографий: {len(self._photo)}\n'
-            f'Выбран саундтрек: '
-            f'да' if self._sound[1] else f'нет' f'\n\n'
-            f'Статус анкеты: {self._status.value}'
+        # Update form status based on number of required questions
+        if qcount > 0:
+            self._status = FormStatus.BLOCKING.name
+        elif self._status != FormStatus.BLOCKING.name:
+            self._status = FormStatus.IDLE.name
+
+        text = str().join(
+            (
+                f'Отвечено вопросов: {acount} из {len(qlist)} (ещё {qcount} '
+                f'обязательных)\n'
+                f'Прикреплено фотографий: {len(self._photo)}\n'
+                f'Выбран саундтрек: ',
+                'да' if self._sound[1] else 'нет' '\n\n',
+                f'Статус анкеты: {FormStatus[self._status].value}',
+            )
         )
-        if self._note and self._status == FormStatus.RETURNED:
+        if self._note and self._status == FormStatus.RETURNED.name:
             text += f'\nПримечание админов: {self._note}'
         return text
