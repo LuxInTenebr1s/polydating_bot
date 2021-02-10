@@ -1,18 +1,28 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # pylint: disable=W0613, C0116, W1203
 # type: ignore[union-attr]
 
 import logging
-from uuid import uuid4
 
-from telegram.ext import Updater
+from uuid import (
+    uuid4
+)
 
-import botdata
-import userdata
-import yamlpersistence
-import private
+from telegram.ext import (
+    Updater
+)
 
-from .config import BotConfig as config
+from . import (
+    yamlpersistence,
+    private
+)
+from .data import (
+    botdata,
+    userdata
+)
+from .config import (
+    BotConfig as config
+)
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG
@@ -34,9 +44,8 @@ def main():
         dispatcher.bot_data['data'] = bot_data
         dispatcher.update_persistence()
     logger.info(f'Current bot UUID: {bot_data.uuid}')
-    userdata.UserData.set_question_count(len(bot_data.questions))
 
-    private.add_private_commands(dispatcher)
+    private.add_handlers(dispatcher)
     updater.start_polling()
 
     updater.idle()

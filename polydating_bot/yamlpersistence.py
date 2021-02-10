@@ -48,12 +48,12 @@ class YamlPersistence(BasePersistence):
         chat = data[id]['data']
         logger.debug(f'chat data is: {chat}')
         return os.path.join(self.directory, CHAT_DIRECTORY,
-                            f'{id}_{chat.name}', f'data.yaml')
+                            f'{id}_{chat.name_id}', 'data.yaml')
 
     def __user_filename(self, id: int, data: Dict[int, Any]) -> str:
         user = data[id]['data']
         return os.path.join(self.directory, USER_DIRECTORY,
-                            f'{id}_{user.nick}', f'data.yaml')
+                            f'{id}_{user.name_id}', 'data.yaml')
 
     def __bot_filename(self) -> str:
         return os.path.join(self.directory, BOT_DIRECTORY, DATA_FILENAME)
@@ -83,7 +83,7 @@ class YamlPersistence(BasePersistence):
         logger.debug(f'Files found in \'{directory}\':')
         for path in os.listdir(directory):
             id = path.split('_')[0]
-            path = os.path.join(directory, path, f'data.yaml')
+            path = os.path.join(directory, path, 'data.yaml')
             data[int(id)] = YamlPersistence.__load_file(path)
             logger.debug(f'\t{path}')
 
@@ -128,6 +128,7 @@ class YamlPersistence(BasePersistence):
 
     def update_user_data(self, user_id: int, data: Dict) -> None:
         logger.debug(f'Update user data: {user_id}: {data}')
+        logger.debug(f'{self.user_data.get(user_id)}')
         if self.user_data.get(user_id) == data:
             return
         self.user_data[user_id] = data

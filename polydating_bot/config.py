@@ -1,17 +1,26 @@
+#!/usr/bin/env python3
+
 import logging
 import os
 
-from typing import Dict, AnyStr, Mapping, Any
+from typing import (
+    Dict,
+    Any
+)
 
-from configparser import ConfigParser
+from configparser import (
+    ConfigParser
+)
 from argparse import (
     ArgumentParser,
     ArgumentError,
     ArgumentTypeError,
-    Namespace,
+    Namespace
 )
 
-import helpers
+from . import (
+    helpers
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +31,8 @@ DEFAULT_PERSIST_DIR = f"{os.path.join(ROOT, 'tmp')}"
 
 class BotConfigMeta(type):
     def __init__(cls, *args, **kwargs):
+        super().__init__(cls)
+
         cls.__config_dir: str = DEFAULT_CONFIG_DIR
         cls.__persist_dir: str = DEFAULT_PERSIST_DIR
         cls.__loglevel: int = logging.WARNING

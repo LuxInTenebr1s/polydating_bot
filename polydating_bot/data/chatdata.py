@@ -1,4 +1,9 @@
-import data
+#!/usr/bin/env python3
+"""Module for chat data."""
 
-class ChatData(data.IdData):
-    pass
+from . import (
+    base
+)
+
+class ChatData(base.IdData):
+    """ Represents chat data. """

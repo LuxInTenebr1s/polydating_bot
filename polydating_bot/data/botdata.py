@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Bot data related module."""
 
 from __future__ import annotations
 
@@ -11,104 +12,148 @@ from typing import (
     Optional,
     Tuple
 )
+from collections.abc import (
+    MutableMapping
+)
 
 import yaml
 try:
-    from yaml import CLoader, CDumper as Loader, Dumper
+    from yaml import CLoader, CDumper as Loader, Dumper # pylint: disable=W0611
 except ImportError:
     from yaml import Loader, Dumper
 
 from telegram.ext import (
     CallbackContext
 )
-from telegram import (
-    TelegramObject,
-    Bot,
-    Chat,
-    TelegramError,
-)
 
-from .. import dating
-from . import data
-import config
-import helpers
+from .. import (
+    dating,
+    config,
+    helpers
+)
+from . import (
+    base
+)
 
 logger = logging.getLogger(__name__)
 
-class BotData(data.Data):
-    __uuid: str = str()
-    __owner: Optional[int] = None
-    __dating_channel: Optional[int] = None
-    __questions: Dict[str, str] = dict()
+class _IdList(MutableMapping):
+    def __init__(self, name: str, *args: Union[int, str]):
+        self._name = name
+        self._list = list()
+        self._list.extend(list(args))
 
-    admins: helpers.IdList = helpers.IdList('admins')
-    pending_forms: helpers.IdList = helpers.IdList('pending_forms')
+    def __iter__(self):
+        return iter(self._list)
+
+    def __len__(self):
+        return len(self._list)
+
+    def __getitem__(self, i):
+        return self._list[i]
+
+    def __setitem__(self, i, val):
+        var_id = helpers.get_chat_id(val)
+        if var_id:
+            logger.info(f'New id added to \'{self._name}\' list: {var_id}')
+            self._list[i] = var_id
+
+    def __delitem__(self, i):
+        del self._list[i]
+
+    def __str__(self):
+        return str(self._list)
+
+    def insert(self, i, val):
+        """Insert item into list."""
+        var_id = helpers.get_chat_id(val)
+        if var_id:
+            logger.info(f'New id added to \'{self._name}\' list: {var_id}')
+            self._list.insert(i, id)
+
+    def append(self, val):
+        """Append item to the list."""
+        self.insert(self.__len__(), val)
+
+
+class BotData(base.Data):
+    """Bot data class. Data specific to a single bot instance."""
+    def __new__(cls, *args, **kwargs): # pylint: disable=W0613
+        if not hasattr(cls, 'instance'):
+            cls.instance = super().__new__(cls)
+        return cls.instance
 
     def __init__(self, uuid: str):
-        self.__uuid = uuid
+        self._uuid: str = uuid
+        self._owner: Optional[int] = None
+        self._dating_channel: Optional[int] = None
+
+        self.questions: dating.QuestionList = dating.QuestionList()
+        self.admins: _IdList = _IdList('admins')
+        self.pending_forms: _IdList = _IdList('pending_forms')
 
         try:
             path = os.path.join(config.BotConfig.config_dir, 'dating-form.yaml')
             with open(path) as file:
-                self.__questions = yaml.load(file, Loader=Loader)
+                self.questions.update_questions(yaml.load(file, Loader=Loader))
         except Exception as exc:
             raise ValueError(f'No dating questions found: {exc}') from exc
 
     @property
     def uuid(self) -> str:
-        return self.__uuid
+        """Bot UUID string. Used for deep-linking."""
+        return self._uuid
 
     @property
     def owner(self) -> int:
-        return self.__owner
+        """Bot owner ID. Grants special permissions to a user with this ID."""
+        return self._owner
 
     @owner.setter
     def owner(self, value: Tuple[str, int]) -> None:
-        if self.__owner:
-            logger.warning(f'Trying to set new owner! Owner has already been set.')
+        if self._owner:
+            logger.warning('Trying to set new owner! Owner has already been set.')
             return
 
-        if value[0] != self.uuid:
+        if value[0] != self._uuid:
             logger.warning(f'Incorrect UUID! Can\'t set new owner: {value[1]}.')
             return
 
-        logger.info(f'helpers')
-        id = helpers.get_chat_id(value[1])
-        logger.info(f'helpers: {id}')
-        if id:
+        var_id = helpers.get_chat_id(value[1])
+        if var_id:
             logger.info(f'Setting new owner: {value[1]}')
-            self.__owner = id
+            self._owner = var_id
         else:
             logger.warning(f'Couldn\'t set new owner! Incorrect chat id: {id}')
 
     @property
     def dating_channel(self) -> Optional[Dict[int, str]]:
-        return self.__dating_channel
+        """Dating channel ID. Used to publish dating forms."""
+        return self._dating_channel
 
     @dating_channel.setter
     def dating_channel(self, value: Union[int, str, None]) -> None:
-        id = helpers.get_chat_id(value)
-        if id:
+        var_id = helpers.get_chat_id(value)
+        if var_id:
             logger.info(f'Adding new dating channel: {id}')
-            self.__dating_channel = id
+            self._dating_channel = var_id
 
     @dating_channel.deleter
     def dating_channel(self) -> None:
-        self.__dating_channel = None
-
-    @property
-    def questions(self) -> Dict[str, str]:
-        return self.__questions
-
-    @questions.setter
-    def questions(self, value: Dict[str, str]) -> None:
-        self.__questions = value
+        self._dating_channel = None
 
     @classmethod
     def from_context(cls, context: CallbackContext) -> BotData:
-        return context.bot_data.get('data', None)
+        """Get instance from callback context."""
+        return context.bot_data.get(cls._KEY, None)
 
-    def question_tag_from_idx(self, idx: int) -> str:
-        if not 0 <= idx < len(self.questions):
-            raise IndexError('Index is out of range')
-        return list(self.__questions.items())[idx][0]
+    def update_context(self, context: CallbackContext) -> None:
+        """Update callback context with instance."""
+        context.bot_data[self._KEY] = self
+
+    @classmethod
+    def get_instance(cls) -> BotData:
+        """Get data instance."""
+        if hasattr(cls, 'instance'):
+            return cls.instance
+        return None
