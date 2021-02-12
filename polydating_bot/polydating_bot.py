@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # pylint: disable=W0613, C0116, W1203
 # type: ignore[union-attr]
+"""Main module."""
 
 import logging
 
@@ -14,11 +15,13 @@ from telegram.ext import (
 
 from . import (
     yamlpersistence,
-    private
+    private,
+    common,
+    public
 )
 from .data import (
     botdata,
-    userdata
+ #   userdata
 )
 from .config import (
     BotConfig as config
@@ -45,7 +48,10 @@ def main():
         dispatcher.update_persistence()
     logger.info(f'Current bot UUID: {bot_data.uuid}')
 
+    common.add_handlers(dispatcher)
     private.add_handlers(dispatcher)
+    public.add_handlers(dispatcher)
+
     updater.start_polling()
 
     updater.idle()

@@ -22,11 +22,11 @@ class IdData(Data):
     """Bot data base class (with ID)."""
     def __init__(self, chat: Chat):
         if chat.username:
-            self._name_id = chat.username
+            self._name_id = f'@{chat.username}'
         elif chat.first_name or chat.last_name:
             self._name_id = f'{chat.first_name}_{chat.last_name}'
         elif chat.title:
-            self._name_id = chat.title
+            self._name_id = f'@{chat.title}'
         else:
             self._name_id = str()
 

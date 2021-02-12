@@ -52,9 +52,6 @@ from .data import (
 
 logger = logging.getLogger(__name__)
 
-def _k(update: Update, context: CallbackContext, udata: UserData) -> None:
-    pass
-
 @decorator.decorator
 def _state(func, back=None, answer='', *args, **kwargs): # pylint: disable=W1113
     user_data = UserData.from_context(args[1])
@@ -109,10 +106,11 @@ def _start(update: Update, context: CallbackContext) -> None:
 
     try:
         UserData.from_context(context)
-    except IndexError:
+    except KeyError:
         UserData(update.message.chat).update_context(context)
         context.chat_data['data'] = chatdata.ChatData(update.message.chat)
         logger.debug(f'Created new user data: {update.message.chat.id}')
+        update.message.reply_text(text=HELP, parse_mode=ParseMode.MARKDOWN_V2)
 
     try:
         bot_data = BotData.from_context(context)
@@ -120,7 +118,6 @@ def _start(update: Update, context: CallbackContext) -> None:
     except:
         pass
 
-    update.message.reply_text(text=HELP, parse_mode=ParseMode.MARKDOWN_V2)
     return _select_level(update, context)
 
 @_state
@@ -180,6 +177,9 @@ def _manage_form(update: Update, context: CallbackContext):
     return SELECT_ACTION
 
 def _send_form(update: Update, context: CallbackContext):
+    bot_data = BotData.get_instance()
+    bot_data.pending_forms.append(update.effective_chat.id)
+
     update.callback_query.answer('Анкета успешно отправлена!')
     return _manage_form(update, context)
 
@@ -378,11 +378,12 @@ def add_handlers(dispatcher: Dispatcher) -> None:
 
     fallback_handlers = [
         CommandHandler('stop', _stop),
+        CommandHandler('start', _start),
         CallbackQueryHandler(_back, pattern=f'^{BACK}$'),
     ]
 
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', _start)],
+        entry_points=[CommandHandler('start', _start, filters=Filters.chat_type.private)],
         states={
             SELECT_LEVEL: select_level_handlers,
             SELECT_ACTION: select_action_handlers,

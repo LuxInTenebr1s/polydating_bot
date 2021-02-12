@@ -13,7 +13,7 @@ from typing import (
     Tuple
 )
 from collections.abc import (
-    MutableMapping
+    MutableSequence
 )
 
 import yaml
@@ -37,14 +37,14 @@ from . import (
 
 logger = logging.getLogger(__name__)
 
-class _IdList(MutableMapping):
+class _IdList(MutableSequence): # pylint: disable=R0901
     def __init__(self, name: str, *args: Union[int, str]):
         self._name = name
         self._list = list()
         self._list.extend(list(args))
 
     def __iter__(self):
-        return iter(self._list)
+        return self._list.__iter__()
 
     def __len__(self):
         return len(self._list)
@@ -54,7 +54,7 @@ class _IdList(MutableMapping):
 
     def __setitem__(self, i, val):
         var_id = helpers.get_chat_id(val)
-        if var_id:
+        if var_id and not var_id in self._list:
             logger.info(f'New id added to \'{self._name}\' list: {var_id}')
             self._list[i] = var_id
 
@@ -64,16 +64,16 @@ class _IdList(MutableMapping):
     def __str__(self):
         return str(self._list)
 
-    def insert(self, i, val):
+    def insert(self, index, value):
         """Insert item into list."""
-        var_id = helpers.get_chat_id(val)
+        var_id = helpers.get_chat_id(value)
         if var_id:
             logger.info(f'New id added to \'{self._name}\' list: {var_id}')
-            self._list.insert(i, id)
+            self._list.insert(index, var_id)
 
-    def append(self, val):
+    def append(self, value):
         """Append item to the list."""
-        self.insert(self.__len__(), val)
+        self.insert(self.__len__(), value)
 
 
 class BotData(base.Data):

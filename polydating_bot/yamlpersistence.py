@@ -1,8 +1,4 @@
-import yaml
-try:
-    from yaml import CLoader, CDumper as Loader, Dumper
-except ImportError:
-    from yaml import Loader, Dumper
+"""Custom persistence module."""
 
 import os
 import logging
@@ -10,6 +6,12 @@ import logging
 from collections import defaultdict
 from copy import deepcopy
 from typing import Any, DefaultDict, Dict, Optional, Tuple
+
+import yaml
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
 
 from telegram.ext import BasePersistence
 from telegram.utils.types import ConversationDict
@@ -24,6 +26,7 @@ DATA_FILENAME = "data.yaml"
 logger = logging.getLogger(__name__)
 
 class YamlPersistence(BasePersistence):
+    """Custom persistence class."""
     def __init__(
         self,
         directory: str,
@@ -31,7 +34,7 @@ class YamlPersistence(BasePersistence):
         store_chat_data: bool = True,
         store_bot_data: bool = True,
         on_flush: bool = False,
-    ):
+    ): # pylint: disable=R0913
         super().__init__(
             store_user_data=store_user_data,
             store_chat_data=store_chat_data,
@@ -44,16 +47,16 @@ class YamlPersistence(BasePersistence):
         self.bot_data: Optional[Dict] = None
         self.conversations: Optional[Dict[str, Dict[Tuple, Any]]] = None
 
-    def __chat_filename(self, id: int, data: Dict[int, Dict]) -> str:
-        chat = data[id]['data']
+    def __chat_filename(self, var_id: int, data: Dict[int, Dict]) -> str:
+        chat = data[var_id]['data']
         logger.debug(f'chat data is: {chat}')
         return os.path.join(self.directory, CHAT_DIRECTORY,
-                            f'{id}_{chat.name_id}', 'data.yaml')
+                            f'{var_id}_{chat.name_id}', 'data.yaml')
 
-    def __user_filename(self, id: int, data: Dict[int, Any]) -> str:
-        user = data[id]['data']
+    def __user_filename(self, var_id: int, data: Dict[int, Any]) -> str:
+        user = data[var_id]['data']
         return os.path.join(self.directory, USER_DIRECTORY,
-                            f'{id}_{user.name_id}', 'data.yaml')
+                            f'{var_id}_{user.name_id}', 'data.yaml')
 
     def __bot_filename(self) -> str:
         return os.path.join(self.directory, BOT_DIRECTORY, DATA_FILENAME)
@@ -67,7 +70,7 @@ class YamlPersistence(BasePersistence):
             return None
         except yaml.YAMLError as exc:
             mark = getattr(exc, 'problem_mark')
-            if mark:
+            if mark: # pylint: disable=R1720
                 raise TypeError(f'Incorrect YAML: {filename}: {mark}') from exc
             else:
                 raise TypeError(f'YAML loading error: {filename}') from exc
@@ -82,9 +85,9 @@ class YamlPersistence(BasePersistence):
 
         logger.debug(f'Files found in \'{directory}\':')
         for path in os.listdir(directory):
-            id = path.split('_')[0]
+            var_id = path.split('_')[0]
             path = os.path.join(directory, path, 'data.yaml')
-            data[int(id)] = YamlPersistence.__load_file(path)
+            data[int(var_id)] = YamlPersistence.__load_file(path)
             logger.debug(f'\t{path}')
 
         logger.info(f'Directory loaded successfully: {directory}')
@@ -163,15 +166,14 @@ class YamlPersistence(BasePersistence):
         pass
 
     def flush(self) -> None:
-        for _, id in enumerate(self.user_data):
-            data = self.user_data
-            self.__dump_file(self.__user_filename(id, data), data[id])
+        data = self.user_data
+        for var_id in self.user_data.keys():
+            self.__dump_file(self.__user_filename(var_id, data), data[var_id])
 
-        for _, id in enumerate(self.chat_data):
-            data = self.chat_data
-            self.__dump_file(self.__chat_filename(id, data), data[id])
+        data = self.chat_data
+        for var_id in self.chat_data.keys():
+            self.__dump_file(self.__chat_filename(var_id, data), data[var_id])
 
         if self.bot_data:
             data = self.bot_data
             self.__dump_file(self.__bot_filename(), data)
-
