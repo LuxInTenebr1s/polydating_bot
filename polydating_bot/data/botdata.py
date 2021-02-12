@@ -53,10 +53,7 @@ class _IdList(MutableSequence): # pylint: disable=R0901
         return self._list[i]
 
     def __setitem__(self, i, val):
-        var_id = helpers.get_chat_id(val)
-        if var_id and not var_id in self._list:
-            logger.info(f'New id added to \'{self._name}\' list: {var_id}')
-            self._list[i] = var_id
+        pass
 
     def __delitem__(self, i):
         del self._list[i]
@@ -66,15 +63,18 @@ class _IdList(MutableSequence): # pylint: disable=R0901
 
     def insert(self, index, value):
         """Insert item into list."""
-        var_id = helpers.get_chat_id(value)
-        if var_id:
-            logger.info(f'New id added to \'{self._name}\' list: {var_id}')
-            self._list.insert(index, var_id)
 
     def append(self, value):
         """Append item to the list."""
-        self.insert(self.__len__(), value)
+        var_id = helpers.get_chat_id(value)
+        if var_id and var_id not in self._list:
+            logger.info(f'New id added to \'{self._name}\' list: {var_id}')
+            self._list.append(var_id)
 
+    def remove(self, value):
+        """Remove item from the list."""
+        if value in self._list:
+            self._list.remove(value)
 
 class BotData(base.Data):
     """Bot data class. Data specific to a single bot instance."""
