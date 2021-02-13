@@ -29,6 +29,9 @@ from telegram import (
     TelegramError
 )
 
+from .dating import (
+    FormStatus
+)
 from .data.botdata import (
     BotData
 )
@@ -134,11 +137,11 @@ def _admins(update: Update, context: CallbackContext):
     list_parser = subparsers.add_parser('list', help='list admins')
     list_parser.add_argument('list', nargs=0, action=_AdminList, **def_args)
 
-    show_parser = subparsers.add_parser('add', help='add admin(s) with \'id\'')
-    show_parser.add_argument('id', nargs='?', action=_AdminAdd, **def_args)
+    add_parser = subparsers.add_parser('add', help='add admin(s) with \'id\'')
+    add_parser.add_argument('id', nargs='?', action=_AdminAdd, **def_args)
 
-    post_parser = subparsers.add_parser('rm', help='remove admin(s) with \'id\'')
-    post_parser.add_argument('id', nargs='*', action=_AdminRm, **def_args)
+    rm_parser = subparsers.add_parser('rm', help='remove admin(s) with \'id\'')
+    rm_parser.add_argument('id', nargs='*', action=_AdminRm, **def_args)
 
     try:
         parser.parse_args(context.args)
@@ -173,6 +176,7 @@ class _PendingPost(_CustomAction):
 
         chat = bot.get_chat(bot_data.dating_channel)
         user_data.send_form(chat.id)
+        user_data.status = FormStatus.PUBLISHED
 
 class _PendingEdit(_CustomAction):
     def __call__(self, parser, namespace, values, option_string = None):

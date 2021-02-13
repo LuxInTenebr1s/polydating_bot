@@ -3,8 +3,6 @@
 
 from telegram.ext import (
     Dispatcher,
-#    MessageHandler,
-#    Filters,
     CallbackContext,
     CommandHandler
 )
@@ -15,9 +13,6 @@ from telegram import (
 from .data.chatdata import (
     ChatData
 )
-#from .data.botdata import (
-#    BotData
-#)
 
 def _start_group(update: Update, context: CallbackContext) -> None:
     try:

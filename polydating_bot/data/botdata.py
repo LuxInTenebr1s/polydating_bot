@@ -7,7 +7,6 @@ import os
 import logging
 
 from typing import (
-    Dict,
     Union,
     Optional,
     Tuple
@@ -23,7 +22,11 @@ except ImportError:
     from yaml import Loader, Dumper
 
 from telegram.ext import (
-    CallbackContext
+    CallbackContext,
+    Dispatcher
+)
+from telegram import (
+    ParseMode
 )
 
 from .. import (
@@ -32,7 +35,8 @@ from .. import (
     helpers
 )
 from . import (
-    base
+    base,
+    userdata
 )
 
 logger = logging.getLogger(__name__)
@@ -92,6 +96,37 @@ class BotData(base.Data):
         self.admins: _IdList = _IdList('admins')
         self.pending_forms: _IdList = _IdList('pending_forms')
 
+        self.update_questions()
+
+    def update_pending(self, data: userdata.UserData):
+        """Add ID to pending list."""
+        if data.id in self.pending_forms:
+            logger.warning('Trying to add already existing ID.')
+
+        self.pending_forms.append(data.id)
+        bot = Dispatcher.get_instance().bot
+
+        for admin in self.admins:
+            # Skip all user admins, post to admin chats.
+            if admin > 0:
+                continue
+            text = f'Новая анкета: {data.id} ('.translate(helpers.TG_TRANSLATE)
+            text += data.nick()
+            text += ')'.translate(helpers.TG_TRANSLATE)
+            bot.send_message(admin, text, parse_mode=ParseMode.MARKDOWN_V2)
+
+        data.status = dating.FormStatus.PENDING
+
+    def remove_pending(self, data: userdata.UserData):
+        """Remove ID from pending list. In future I should probably add a timer."""
+        if data.id not in self.pending_forms:
+            logger.warning('Trying to remove missing ID.')
+
+        self.pending_forms.remove(data.id)
+        data.status = dating.FormStatus.IDLE
+
+    def update_questions(self):
+        """Update questions from configuration directory."""
         try:
             path = os.path.join(config.BotConfig.config_dir, 'dating-form.yaml')
             with open(path) as file:
@@ -127,7 +162,7 @@ class BotData(base.Data):
             logger.warning(f'Couldn\'t set new owner! Incorrect chat id: {id}')
 
     @property
-    def dating_channel(self) -> Optional[Dict[int, str]]:
+    def dating_channel(self) -> Optional[int]:
         """Dating channel ID. Used to publish dating forms."""
         return self._dating_channel
 

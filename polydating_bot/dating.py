@@ -19,9 +19,6 @@ from enum import (
 from collections.abc import (
     MutableSequence
 )
-from abc import (
-    abstractmethod
-)
 
 from telegram import (
     File
@@ -29,10 +26,6 @@ from telegram import (
 
 from .helpers import (
     TG_TRANSLATE
-)
-
-from .data.botdata import (
-    BotData
 )
 
 logger = logging.getLogger(__name__)
@@ -57,7 +50,6 @@ class _Item():
         self._value = value
 
     def __eq__(self, other: _Item):
-        logger.debug(f'it happens too: {self} and {other}')
         if not isinstance(other, _Item):
             raise TypeError('Other is of incorrect type.')
         if str(self) == str(other):
@@ -85,7 +77,6 @@ class _ItemList(MutableSequence): # pylint: disable=R0901
 
     def __contains__(self, key: object):
         for item in self._items:
-            logger.debug(f'it happens: {item.tag}')
             if item.tag == str(key):
                 return True
         return False
@@ -100,11 +91,13 @@ class _ItemList(MutableSequence): # pylint: disable=R0901
             return item
         return None
 
-    @abstractmethod
+    def extend(self, values):
+        """Extends existing list."""
+        self._items.extend(values)
+
     def __delitem__(self, item):
         pass
 
-    @abstractmethod
     def __setitem__(self, key, item):
         pass
 
@@ -153,23 +146,24 @@ class _Question(_Item):
                 flags.append(_QuestionFlag[flag])
         return flags
 
-_BASE_QUESTIONS = [
+_BASE_QUESTIONS = _ItemList()
+_BASE_QUESTIONS.extend([
     _Question(
         'name',
-        'Как Вас зовут?',
+        'Как тебя зовут?',
         '',
         [_QuestionFlag.REQUIRED.name]
     ),
     _Question(
         'age',
-        'Сколько Вам лет?',
+        'Сколько тебе лет?',
         '',
         [_QuestionFlag.DIGITS.name, _QuestionFlag.REQUIRED.name]
     ),
     _Question(
         'place',
-        'Где Вы живёте?',
-        'Укажите город в формате тэга: напишите название города, заменяя '
+        'Где ты живёшь?',
+        'Укажи город в формате тэга: напиши название города, заменяя '
         'дефисы и пробелы на нижнее подчёркивание (\'_\'): например, '
         '#Нижний_Новгород или #Улан_Удэ. Для городов Москва и Санкт-Петербург '
         'зарезервированы тэги #Мск и #Спб соответственно.',
@@ -181,7 +175,7 @@ _BASE_QUESTIONS = [
         'Сообщи любую дополнительную информацию, которую сочтёшь нужной.',
         []
     )
-]
+])
 
 class QuestionList(_ItemList): # pylint: disable=R0901
     """Questions list. Represents attributes and methods for questions."""
@@ -192,7 +186,7 @@ class QuestionList(_ItemList): # pylint: disable=R0901
 
     def __init__(self, data: Optional[List[Dict[str, Dict]]] = None):
         super().__init__()
-        self._items += _BASE_QUESTIONS
+        self._items.extend(_BASE_QUESTIONS)
 
         if not data:
             return
@@ -261,7 +255,6 @@ class Form():
 
         self._photo: List[str] = []
         self._sound: Tuple[bool, str] = (False, str())
-#        self._nick: str = str()
 
         self._status: str = FormStatus.BLOCKING.name
         self._note: str = str()
@@ -278,10 +271,13 @@ class Form():
 
     def _print_form(self) -> str:
         """Prints form to be pulished."""
-        questions = BotData.get_instance().questions
+        questions = QuestionList.get_instance()
         items = [self._print_header().translate(TG_TRANSLATE)]
 
         for answer in self.answers:
+            # This questions are part of a header
+            if answer.tag in _BASE_QUESTIONS:
+                continue
             question = questions[answer.tag].question.translate(TG_TRANSLATE)
             item = (f'*{question}*', f'{answer.answer}'.translate(TG_TRANSLATE))
             items.append('\n\n'.join(item))
@@ -311,15 +307,15 @@ class Form():
         qcount = 0
         acount = 0
         for question in qlist:
-            if _QuestionFlag.REQUIRED in question.flags and not question in self.answers:
+            if _QuestionFlag.REQUIRED in question.flags and not question.tag in self.answers:
                 qcount += 1
-            if question in self.answers:
+            if question.tag in self.answers:
                 acount += 1
 
         # Update form status based on number of required questions
-        if qcount > 0:
+        if qcount > 0 or len(self._photo) == 0:
             self._status = FormStatus.BLOCKING.name
-        elif self._status != FormStatus.BLOCKING.name:
+        elif self._status == FormStatus.BLOCKING.name:
             self._status = FormStatus.IDLE.name
 
         text = str().join(
@@ -328,10 +324,19 @@ class Form():
                 f'обязательных)\n'
                 f'Прикреплено фотографий: {len(self._photo)}\n'
                 f'Выбран саундтрек: ',
-                'да' if self._sound[1] else 'нет' '\n\n',
+                'да' if self._sound[1] else 'нет', '\n\n',
                 f'Статус анкеты: {FormStatus[self._status].value}',
             )
         )
         if self._note and self._status == FormStatus.RETURNED.name:
             text += f'\nПримечание админов: {self._note}'
         return text
+
+    @property
+    def status(self) -> FormStatus:
+        """Form status Enum."""
+        return FormStatus[self._status]
+
+    @status.setter
+    def status(self, value: FormStatus) -> None:
+        self._status = value.name

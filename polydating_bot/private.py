@@ -25,6 +25,10 @@ from .helpers import (
     TG_TRANSLATE
 )
 
+from .dating import (
+    FormStatus
+)
+
 from .data.userdata import (
     UserData
 )
@@ -34,6 +38,7 @@ from .data.botdata import (
 from .data import (
     chatdata
 )
+
 #    botdata,
 #    chatdata,
 
@@ -46,13 +51,14 @@ from .data import (
  APPEND_SOUND,
  EDIT_FORM,
  SEND_FORM,
+ WITHDRAW_FORM,
  DELETE_FORM,
  NEXT_QUESTION,
  PREV_QUESTION,
  BACK,
  STOP,
  MANAGE_FORM
-) = map(chr, range(15))
+) = map(chr, range(16))
 
 logger = logging.getLogger(__name__)
 
@@ -148,35 +154,79 @@ def _show_help(update: Update, context: CallbackContext):
 
 @_state(back=_select_level)
 def _manage_form(update: Update, context: CallbackContext):
-    text = (
-        'Выбери, что ты хочешь сделать с анкетой:'
-    )
-    buttons = [
-        [
-            InlineKeyboardButton(text='Отправить анкету', callback_data=str(SEND_FORM)),
-            InlineKeyboardButton(text='Удалить анкету', callback_data=str(DELETE_FORM)),
-        ],
-        [
-            InlineKeyboardButton(text='Назад', callback_data=str(BACK)),
-        ],
-    ]
+    user_data = UserData.from_context(context)
+
+    # This method updates current form status, so it has to be called before
+    # going for 'status' branches
+    status = user_data.show_status()
+
+    buttons = [[], []]
+    text = str()
+
+    if user_data.status == FormStatus.BLOCKING:
+        buttons[0].append(InlineKeyboardButton(text='Ответить на вопросы',
+                                               callback_data=str(ANSWER_QUESTION)))
+        buttons[0].append(InlineKeyboardButton(text='Прикрепить файлы',
+                                               callback_data=str(APPEND_FILES)))
+        text = (
+            'Заполни анкету для отправки.'
+        )
+    elif user_data.status == FormStatus.IDLE:
+        buttons[0].append(InlineKeyboardButton(text='Отправить анкету',
+                                               callback_data=str(SEND_FORM)))
+        text = (
+            'Анкета заполнена и готова к отправке на ревью админами.'
+        )
+    elif user_data.status == FormStatus.PENDING:
+        buttons[0].append(InlineKeyboardButton(text='Отозвать анкету',
+                                               callback_data=str(WITHDRAW_FORM)))
+        text = (
+            'Анкета отправлена и ожидает ревью. Если хочешь внести правки -- '
+            'сначала отзови анкету назад.'
+        )
+    elif user_data.status == FormStatus.PUBLISHED:
+        buttons[0].append(InlineKeyboardButton(text='Удалить анкету',
+                                               callback_data=str(DELETE_FORM)))
+        text = (
+            'Анкета успешно опубликована! Поздравляю. В любой момент ты можешь '
+            'удалить её из канала.'
+        )
+    elif user_data.status == FormStatus.RETURNED:
+        buttons[0].append(InlineKeyboardButton(text='Отправить анкету',
+                                               callback_data=str(SEND_FORM)))
+        text = (
+            'К сожалению, твоя анкета не прошла ревью админами. Ознакомься '
+            'с замечаниями и попробуй ещё раз.'
+        )
+
+    buttons[1].append(InlineKeyboardButton(text='Назад', callback_data=str(BACK)))
     keyboard = InlineKeyboardMarkup(buttons)
 
-    user_data = UserData.from_context(context)
     user_data.print_messages(
             {'text': text},
-            {'text': user_data.show_status(), 'reply_markup': keyboard}
+            {'text': status, 'reply_markup': keyboard}
     )
     return SELECT_ACTION
 
 def _send_form(update: Update, context: CallbackContext):
-    bot_data = BotData.get_instance()
-    bot_data.pending_forms.append(update.effective_chat.id)
+    user_data = UserData.from_context(context)
+    BotData.get_instance().update_pending(user_data)
 
     update.callback_query.answer('Анкета успешно отправлена!')
     return _manage_form(update, context)
 
+def _withdraw_form(update: Update, context: CallbackContext):
+    user_data = UserData.from_context(context)
+    BotData.get_instance().remove_pending(user_data)
+
+    update.callback_query.answer('Отправка анкеты отменена.')
+    return _manage_form(update, context)
+
 def _delete_form(update: Update, context: CallbackContext):
+    user_data = UserData.from_context(context)
+    user_data.delete_form()
+    user_data.status = FormStatus.IDLE
+
     update.callback_query.answer('Анкета успешно удалена.')
     return _manage_form(update, context)
 
@@ -366,6 +416,7 @@ def add_handlers(dispatcher: Dispatcher) -> None:
         CallbackQueryHandler(_append_photos, pattern=f'^{APPEND_PHOTOS}$'),
         CallbackQueryHandler(_manage_form, pattern=f'^{MANAGE_FORM}$'),
         CallbackQueryHandler(_send_form, pattern=f'^{SEND_FORM}$'),
+        CallbackQueryHandler(_withdraw_form, pattern=f'^{WITHDRAW_FORM}$'),
         CallbackQueryHandler(_delete_form, pattern=f'^{DELETE_FORM}$'),
     ]
 

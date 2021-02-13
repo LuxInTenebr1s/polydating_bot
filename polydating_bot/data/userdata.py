@@ -15,10 +15,10 @@ from typing import (
 
 from telegram import (
     Chat,
-    Message,
+#    Message,
     ParseMode,
-    InputMediaPhoto
-#    File
+    InputMediaPhoto,
+    TelegramError
 )
 from telegram.ext import (
     CallbackContext,
@@ -51,9 +51,9 @@ class UserData(base.IdData, dating.Form):
 
         self._current_question: int = 0
 
-        self._msgs: List[Optional[Message]] = [None] * self._MSG_COUNT
+        self._msgs: List[Optional[int]] = [None] * self._MSG_COUNT
         self._back: Optional[Callable] = None
-        self._form_ids: List[Optional[int]] = [None]
+        self._form_ids: Dict[int, List[int]] = dict()
 
     @property
     def current_question(self) -> int:
@@ -84,69 +84,93 @@ class UserData(base.IdData, dating.Form):
         context.user_data[self._KEY] = self
 
     def directory(self) -> str:
-        """Kek."""
+        """Get bot directory."""
         dirlist = os.listdir(f'{config.BotConfig.persist_dir}/user')
         path = next(x for x in dirlist if str(x).startswith(str(self.id)))
         return os.path.normpath(f'{config.BotConfig.persist_dir}/user/{path}')
 
-    def __save_file(self, data, name: str) -> None:
-        try:
-            dirlist = os.listdir(f'{config.BotConfig.persist_dir}/user')
-            path = next(x for x in dirlist if str(x).startswith(str(self.id)))
-            logger.debug(f'Saving file: {path}/{name}')
-            with open(f'{self.directory()}/{path}/{name}', 'wb') as file:
-                file.write(data)
-        except OSError as exc:
-            raise OSError('Failed to save file: {path}/{name}') from exc
-
-    def save_photo(self, photo, idx: int) -> None:
-        """Kek."""
-        self.__save_file(photo, f'photo{idx}')
-
     def clear_messages(self) -> None:
         """Clear bot messages."""
-        for idx, _ in enumerate(self._msgs):
-            if self._msgs[idx]:
-                self._msgs[idx].delete()
-                self._msgs[idx] = None
+        bot = Dispatcher.get_instance().bot
+        for idx, msg in enumerate(self._msgs):
+            if not msg:
+                continue
+            self._msgs[idx] = None
+            bot.delete_message(self.id, msg)
 
     def print_messages(self, *args: Dict) -> None:
         """Print messages. Pass each message argument as keyword dictionary."""
-        for idx, _ in enumerate(self._msgs):
+        bot = Dispatcher.get_instance().bot
+        for idx, msg in enumerate(self._msgs):
             try:
                 kwargs = args[idx]
             except IndexError:
                 kwargs = None
 
             if not kwargs:
-                if self._msgs[idx]:
-                    self._msgs[idx].delete()
+                if msg:
                     self._msgs[idx] = None
+                    bot.delete_message(self.id, msg)
                 continue
 
-            if not self._msgs[idx]:
-                bot = Dispatcher.get_instance().bot
-                self._msgs[idx] = bot.send_message(self.id, **kwargs)
+            if msg:
+                try:
+                    var_id = bot.edit_message_text(chat_id=self.id, message_id=msg,
+                                                   **kwargs).message_id
+                    self._msgs[idx] = var_id
+                except TelegramError:
+                    pass
             else:
-                for key, value in kwargs.items():
-                    if vars(self._msgs[idx]).get(key) == value:
-                        continue
-                    self._msgs[idx] = self._msgs[idx].edit_text(**kwargs)
-                    break
+                self._msgs[idx] = bot.send_message(self.id, **kwargs).message_id
 
-    def send_form(self, chat_id: int) -> None:
+    def send_form(self, chat_id: int) -> List[int]:
         """Send form to the specified chat."""
         bot = Dispatcher.get_instance().bot
 
+        if chat_id == botdata.BotData.get_instance().dating_channel:
+            for var_id, _ in self._form_ids.items():
+                self.delete_form(var_id)
+        elif chat_id in self._form_ids:
+            self.delete_form(chat_id)
+
+        nick = '*Ник:* ' + self.nick()
+        text = self._print_form() + '\n\n' + nick
+
+        msg_ids = []
+        msg_ids.append(bot.send_message(chat_id, text,
+                                        parse_mode=ParseMode.MARKDOWN_V2).message_id)
+
+        media = list((InputMediaPhoto(file_id) for file_id in self._photo))
+        media_list = bot.send_media_group(chat_id, media=media,
+                                          reply_to_message_id=msg_ids[-1])
+        msg_ids.extend(list(x.message_id for x in media_list))
+        self._form_ids[chat_id] = msg_ids
+
+    def delete_form(self, chat_id: int = None):
+        """Delete form from dating channel."""
+        bot = Dispatcher.get_instance().bot
+        bot_data = botdata.BotData.get_instance()
+
+        if not chat_id:
+            chat_id = bot_data.dating_channel
+
+        if chat_id and self._form_ids.get(chat_id):
+            for var_id in self._form_ids[chat_id]:
+                try:
+                    bot.delete_message(chat_id, var_id)
+                except TelegramError as exc:
+                    logger.warning(f'{chat_id}: {var_id}: {exc}')
+
+    def nick(self) -> str:
+        """Get formatted nick."""
+        bot = Dispatcher.get_instance().bot
         chat = bot.get_chat(self.id)
         if chat.username:
             nick = f'@{chat.username}'.translate(TG_TRANSLATE)
         else:
-            nick = f'[{chat.full_name}](tg://user?id={self.id})'
-        nick = '*Ник:* ' + nick
-
-        text = self._print_form() + '\n\n' + nick
-        msg = bot.send_message(chat_id, text, parse_mode=ParseMode.MARKDOWN_V2)
-
-        media = list((InputMediaPhoto(file_id) for file_id in self._photo))
-        bot.send_media_group(chat_id, media=media, reply_to_message_id=msg.message_id)
+            name = chat.first_name if chat.first_name else str()
+            name += ' ' + chat.last_name if chat.last_name else str()
+            name = name.translate(TG_TRANSLATE)
+            link = f'tg://user?id={self.id}'.translate(TG_TRANSLATE)
+            nick = f'[{name}]({link})'
+        return nick

@@ -46,6 +46,8 @@ def main():
         bot_data = botdata.BotData(str(uuid4()))
         dispatcher.bot_data['data'] = bot_data
         dispatcher.update_persistence()
+    else:
+        bot_data.update_questions()
     logger.info(f'Current bot UUID: {bot_data.uuid}')
 
     common.add_handlers(dispatcher)
