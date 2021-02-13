@@ -9,7 +9,8 @@ from typing import (
     Dict,
     List,
     Tuple,
-    Optional
+    Optional,
+    Union
 )
 from enum import (
     Enum,
@@ -20,6 +21,18 @@ from collections.abc import (
 )
 from abc import (
     abstractmethod
+)
+
+from telegram import (
+    File
+)
+
+from .helpers import (
+    TG_TRANSLATE
+)
+
+from .data.botdata import (
+    BotData
 )
 
 logger = logging.getLogger(__name__)
@@ -161,6 +174,12 @@ _BASE_QUESTIONS = [
         '#Нижний_Новгород или #Улан_Удэ. Для городов Москва и Санкт-Петербург '
         'зарезервированы тэги #Мск и #Спб соответственно.',
         [_QuestionFlag.REQUIRED.name]
+    ),
+    _Question(
+        'self',
+        'Расскажи о себе?',
+        'Сообщи любую дополнительную информацию, которую сочтёшь нужной.',
+        []
     )
 ]
 
@@ -235,18 +254,55 @@ class _AnswerList(_ItemList): # pylint: disable=R0901
 
 class Form():
     """Dating form class."""
+    _SOUND_FILE = True
+
     def __init__(self, *args, **kwargs): # pylint: disable=W0613
         self.answers = _AnswerList()
 
         self._photo: List[str] = []
         self._sound: Tuple[bool, str] = (False, str())
-        self._nick: str = str()
+#        self._nick: str = str()
 
         self._status: str = FormStatus.BLOCKING.name
         self._note: str = str()
 
-    def print_form(self) -> None:
+    def _print_header(self) -> str:
+        text = (
+            f"{self.answers['name'].answer}"
+            f"({self.answers['age'].answer}), "
+            f"{self.answers['place'].answer}"
+        )
+        if self.answers['self']:
+            text += f"\n\n{self.answers['self'].answer}"
+        return text
+
+    def _print_form(self) -> str:
         """Prints form to be pulished."""
+        questions = BotData.get_instance().questions
+        items = [self._print_header().translate(TG_TRANSLATE)]
+
+        for answer in self.answers:
+            question = questions[answer.tag].question.translate(TG_TRANSLATE)
+            item = (f'*{question}*', f'{answer.answer}'.translate(TG_TRANSLATE))
+            items.append('\n\n'.join(item))
+
+        if self._sound[1] and not self._sound[0]:
+            question = 'Soundtrack: '.translate(TG_TRANSLATE)
+            item = (f'*{question}*', f'{self._sound[1]}'.translate(TG_TRANSLATE))
+            items.append(''.join(item))
+
+        return '\n\n'.join(items)
+
+    def save_photos(self, photos: List[str]) -> None:
+        """Save photos as file_id strings."""
+        self._photo = photos
+
+    def save_sound(self, sound: Union[File, str]) -> None:
+        """Saves a soundtrack to a local directory (or soundtrack name)."""
+        if isinstance(sound, File):
+            self._sound = (True, sound.file_id)
+        else:
+            self._sound = (False, str(sound))
 
     def show_status(self) -> str:
         """Returns this form status string."""

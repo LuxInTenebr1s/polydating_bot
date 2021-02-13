@@ -13,6 +13,17 @@ from telegram import (
 
 logger = logging.getLogger(__name__)
 
+TG_TRANSLATE = str.maketrans({
+    '.': r'\.',
+    '!': r'\!',
+    '(': r'\(',
+    ')': r'\)',
+    '-': r'\-',
+    '*': r'\*',
+    '_': r'\_',
+    '#': r'\#',
+})
+
 def get_chat_id(var_id: Union[str, int]) -> Optional[int]:
     """Check chat ID by ID or username."""
     bot: Bot = Dispatcher.get_instance().bot

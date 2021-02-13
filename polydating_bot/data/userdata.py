@@ -11,17 +11,22 @@ from typing import (
     Optional,
     List,
     Callable,
-    Union
 )
 
 from telegram import (
     Chat,
     Message,
-    File
+    ParseMode,
+    InputMediaPhoto
+#    File
 )
 from telegram.ext import (
     CallbackContext,
     Dispatcher,
+)
+
+from ..helpers import (
+    TG_TRANSLATE
 )
 
 from .. import (
@@ -48,6 +53,7 @@ class UserData(base.IdData, dating.Form):
 
         self._msgs: List[Optional[Message]] = [None] * self._MSG_COUNT
         self._back: Optional[Callable] = None
+        self._form_ids: List[Optional[int]] = [None]
 
     @property
     def current_question(self) -> int:
@@ -128,28 +134,19 @@ class UserData(base.IdData, dating.Form):
                     self._msgs[idx] = self._msgs[idx].edit_text(**kwargs)
                     break
 
-    def _save_file(self, file: File) -> str:
-        file.download(custom_path=f'{self.directory()}/{file.file_unique_id}')
-        return file.file_unique_id
+    def send_form(self, chat_id: int) -> None:
+        """Send form to the specified chat."""
+        bot = Dispatcher.get_instance().bot
 
-    def _remove_photos(self) -> None:
-        for file in self._photo:
-            path = f'{self.directory()}/{file}'
-            try:
-                os.remove(path)
-            except OSError:
-                logger.warning(f'Couldn\'t remove file: {path}')
-        self._photo.clear()
-
-    def save_photos(self, photos: List[File]) -> None:
-        """Saves a photo to a local directory."""
-        self._remove_photos()
-        for photo in photos:
-            self._photo.append(self._save_file(photo))
-
-    def save_sound(self, sound: Union[File, str]) -> None:
-        """Saves a soundtrack to a local directory (or soundtrack name)."""
-        if isinstance(sound, File):
-            self._sound = (True, self._save_file(sound))
+        chat = bot.get_chat(self.id)
+        if chat.username:
+            nick = f'@{chat.username}'.translate(TG_TRANSLATE)
         else:
-            self._sound = (False, str(sound))
+            nick = f'[{chat.full_name}](tg://user?id={self.id})'
+        nick = '*Ник:* ' + nick
+
+        text = self._print_form() + '\n\n' + nick
+        msg = bot.send_message(chat_id, text, parse_mode=ParseMode.MARKDOWN_V2)
+
+        media = list((InputMediaPhoto(file_id) for file_id in self._photo))
+        bot.send_media_group(chat_id, media=media, reply_to_message_id=msg.message_id)

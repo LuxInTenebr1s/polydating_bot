@@ -9,7 +9,7 @@ from telegram import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     Update,
-    ParseMode,
+    ParseMode
 )
 from telegram.ext import (
     CommandHandler,
@@ -19,6 +19,10 @@ from telegram.ext import (
     CallbackQueryHandler,
     CallbackContext,
     Dispatcher
+)
+
+from .helpers import (
+    TG_TRANSLATE
 )
 
 from .data.userdata import (
@@ -69,18 +73,7 @@ def _state(func, back=None, answer='', *args, **kwargs): # pylint: disable=W1113
     return func(*args, *kwargs)
 
 def _stop(update: Update, context: CallbackContext) -> None: # pylint: disable=W0613
-    pass
-
-TG_TRANSLATE = str.maketrans({
-    '.': r'\.',
-    '!': r'\!',
-    '(': r'\(',
-    ')': r'\)',
-    '-': r'\-',
-    '*': r'\*',
-    '_': r'\_',
-    '#': r'\#',
-})
+    return ConversationHandler.END
 
 HELP = (
     'Привет! Я бот, который поможет тебе создать и опубликовать собственную '
@@ -97,8 +90,8 @@ HELP = (
     '\'Управление анкетой\'.\n\n'
     """"""
     'Список доступных команд:\n'
-    '/start - возвращение в начало\n'
-    '/впистуябольшенепридумла - хех)0)'
+    '/start - начать диалог\n'
+    '/stop  - окончить диалог'
 ).translate(TG_TRANSLATE)
 
 def _start(update: Update, context: CallbackContext) -> None:
@@ -311,6 +304,10 @@ def _save_sound(update: Update, context: CallbackContext):
     return _append_files(update, context)
 
 def _save_sound(update: Update, context: CallbackContext):
+    user_data = UserData.from_context(context)
+    if not update.message.audio:
+        user_data.save_sound(update.message.text)
+        user_data.update_context(context)
     return _append_files(update, context)
 
 @_state(back=_append_files)
@@ -337,8 +334,9 @@ def _save_photos(update: Update, context: CallbackContext):
 
     photos = []
     for upd in updates:
-        if upd.message.photo:
-            photos.append(upd.message.photo[-1].get_file())
+        if not upd.message.photo:
+            continue
+        photos.append(upd.message.photo[-1].get_file().file_id)
 
     user_data = UserData.from_context(context)
     user_data.save_photos(photos)
@@ -377,8 +375,7 @@ def add_handlers(dispatcher: Dispatcher) -> None:
     ]
 
     fallback_handlers = [
-        CommandHandler('stop', _stop),
-        CommandHandler('start', _start),
+        CommandHandler('stop', _stop, filters=Filters.chat_type.private),
         CallbackQueryHandler(_back, pattern=f'^{BACK}$'),
     ]
 

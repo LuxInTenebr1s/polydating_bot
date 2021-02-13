@@ -25,7 +25,8 @@ from telegram.ext import (
 
 from telegram import (
     Update,
-    Message
+    Message,
+    TelegramError
 )
 
 from .data.botdata import (
@@ -47,7 +48,7 @@ def _get_data_by_id(var_id: int) -> UserData:
         data = Dispatcher.get_instance().chat_data.get(var_id)
 
     if not data:
-        raise ValueError('Unknown ID.')
+        raise ValueError('Неизвестный ID.')
     return data['data']
 
 class AdminsFilter(MessageFilter):
@@ -105,14 +106,13 @@ class _AdminAdd(_CustomAction):
             bot_data.admins.append(self._update.effective_chat.id)
             return
 
-        for admin in values:
-            try:
-                var_id = int(admin)
-                bot_data.admins.append(var_id)
-            except ValueError:
-                data_iter = self._context.dispatcher.user_data.items()
-                var_id = next(x for x, val in data_iter if val['data'].name_id == admin)
-                bot_data.admins.append(var_id)
+        try:
+            var_id = int(values)
+            bot_data.admins.append(var_id)
+        except ValueError:
+            data_iter = self._context.dispatcher.user_data.items()
+            var_id = next(x for x, val in data_iter if val['data'].name_id == values)
+            bot_data.admins.append(var_id)
 
 class _AdminRm(_CustomAction):
     def __call__(self, parser, namespace, values, option_string = None):
@@ -160,14 +160,19 @@ class _PendingList(_CustomAction):
 class _PendingShow(_CustomAction):
     def __call__(self, parser, namespace, values, option_string = None):
         user_data = _get_data_by_id(int(values[0]))
-        bot = Dispatcher.get_instance().bot
-        bot.send_message(self._update.effective_chat.id, f'Showing: {user_data.name_id}')
+        user_data.send_form(self._update.effective_chat.id)
 
 class _PendingPost(_CustomAction):
     def __call__(self, parser, namespace, values, option_string = None):
         user_data = _get_data_by_id(int(values[0]))
+        bot_data = BotData.get_instance()
         bot = Dispatcher.get_instance().bot
-        bot.send_message(self._update.effective_chat.id, f'Posting: {user_data.name_id}')
+
+        if not bot_data.dating_channel:
+            raise ValueError('Не указан канал для публикации!')
+
+        chat = bot.get_chat(bot_data.dating_channel)
+        user_data.send_form(chat.id)
 
 class _PendingEdit(_CustomAction):
     def __call__(self, parser, namespace, values, option_string = None):
@@ -196,14 +201,61 @@ def _pending(update: Update, context: CallbackContext):
 
     try:
         parser.parse_args(context.args)
-    except ValueError as exc:
+    except (ValueError, TelegramError) as exc:
+        context.bot.send_message(update.message.chat.id, text=str(exc))
+
+class _ChannelShow(_CustomAction):
+    def __call__(self, parser, namespace, values, option_string = None):
+        bot_data = BotData.get_instance()
+        bot = Dispatcher.get_instance().bot
+
+        text = 'Канал для публикаций: '
+        if bot_data.dating_channel:
+            text += f'@{bot.get_chat(bot_data.dating_channel).username}'
+
+        bot.send_message(self._update.effective_chat.id, text)
+
+class _ChannelSet(_CustomAction):
+    def __call__(self, parser, namespace, values, option_string = None):
+        bot_data = BotData.get_instance()
+        bot = Dispatcher.get_instance().bot
+
+        if not values:
+            bot_data.dating_channel = None
+            return
+
+        # It's a single item (because of '?')
+        chat = bot.get_chat(values)
+        if chat.type == 'channel':
+            bot_data.dating_channel = chat.id
+        else:
+            raise ValueError('Не является каналом.')
+
+def _dating_channel(update: Update, context: CallbackContext):
+    def_args = {'update': update, 'context': context}
+    parser = _RedirectArgumentParser()
+    subparsers = parser.add_subparsers()
+
+    list_parser = subparsers.add_parser('show', help='show dating channel')
+    list_parser.add_argument('show', nargs=0, action=_ChannelShow, **def_args)
+
+    show_parser = subparsers.add_parser('set', help='set dating channel \'id\'')
+    show_parser.add_argument('id', nargs='?', action=_ChannelSet, **def_args)
+
+    try:
+        parser.parse_args(context.args)
+    except (ValueError, TelegramError) as exc:
         context.bot.send_message(update.message.chat.id, text=str(exc))
 
 def add_handlers(dispatcher: Dispatcher) -> None:
     """Add common handlers to dispatcher."""
+    admins = AdminsFilter()
+    owner = OwnerFilter()
+
     handlers = [
-        CommandHandler('admins', _admins, filters=OwnerFilter()),
-        CommandHandler('pending', _pending, filters=AdminsFilter()),
+        CommandHandler('admins', _admins, filters=owner),
+        CommandHandler('pending', _pending, filters=admins),
+        CommandHandler('dating_channel', _dating_channel, filters=admins),
     ]
     for handler in handlers:
         dispatcher.add_handler(handler)
