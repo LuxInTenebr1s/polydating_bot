@@ -1,0 +1,10 @@
+Source: polydating-bot
+Section: python
+Priority: extra
+Maintainer: Lux <sr.Lux1nt@gmail.com>
+Build-Depends: debhelper (>=9), python3.8
+
+Package: polydating-bot
+Architecture: any
+Depends: ${misc:Depends}
+Description: Telegram bot for dating channel
