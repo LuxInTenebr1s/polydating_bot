@@ -1,138 +1,133 @@
 #!/usr/bin/env python3
-"""Bot data related module."""
+"""Bot data module."""
 
 from __future__ import annotations
 
-import os
 import logging
 
+from uuid import (
+    uuid4
+)
 from typing import (
     Union,
     Optional,
-    Tuple
+    Tuple,
+    Dict
 )
 from collections.abc import (
     MutableSequence
 )
 
-import yaml
-try:
-    from yaml import CLoader, CDumper as Loader, Dumper # pylint: disable=W0611
-except ImportError:
-    from yaml import Loader, Dumper
-
 from telegram.ext import (
-    CallbackContext,
     Dispatcher
 )
 from telegram import (
-    ParseMode
+    TelegramError
+)
+from yaml import (
+    YAMLObject
 )
 
-from .. import (
-    dating,
-    config,
-    helpers
+from polydating_bot import (
+    IncorrectIdError,
 )
-from . import (
-    base,
-    userdata
+from polydating_bot.data import (
+    ABCYamlMeta,
+    Data,
+    DataType
 )
 
 logger = logging.getLogger(__name__)
 
-class _IdList(MutableSequence): # pylint: disable=R0901
-    def __init__(self, name: str, *args: Union[int, str]):
+class _IdList(MutableSequence, YAMLObject, metaclass=ABCYamlMeta): # pylint: disable=R0901
+    yaml_tag = u'!IdList'
+
+    def __init__(self, name: str):
         self._name = name
         self._list = list()
-        self._list.extend(list(args))
 
     def __iter__(self):
         return self._list.__iter__()
 
     def __len__(self):
-        return len(self._list)
+        return self._list.__len__()
 
-    def __getitem__(self, i):
-        return self._list[i]
+    def __getitem__(self, idx):
+        return self._list.__getitem__(idx)
 
-    def __setitem__(self, i, val):
+    def __setitem__(self, idx, value):
         pass
 
-    def __delitem__(self, i):
-        del self._list[i]
+    def __delitem__(self, idx):
+        self._list.__delitem__(idx)
 
     def __str__(self):
-        return str(self._list)
+        return self._list.__str__()
 
     def insert(self, index, value):
         """Insert item into list."""
 
     def append(self, value):
-        """Append item to the list."""
-        var_id = helpers.get_chat_id(value)
-        if var_id and var_id not in self._list:
+        """Append item to list."""
+        bot = Dispatcher.get_instance().bot
+        try:
+            var_id = bot.getChat(value).id
+        except TelegramError as exc:
+            raise IncorrectIdError(f'Can\'t get chat: {value}') from exc
+
+        if var_id not in self._list:
             logger.info(f'New id added to \'{self._name}\' list: {var_id}')
             self._list.append(var_id)
 
     def remove(self, value):
-        """Remove item from the list."""
+        """Remove item from list."""
         if value in self._list:
             self._list.remove(value)
 
-class BotData(base.Data):
-    """Bot data class. Data specific to a single bot instance."""
-    def __new__(cls, *args, **kwargs): # pylint: disable=W0613
-        if not hasattr(cls, 'instance'):
-            cls.instance = super().__new__(cls)
-        return cls.instance
+    @classmethod
+    def to_yaml(cls, dumper, data: _IdList):
+        mapping = {getattr(data, '_name'): getattr(data, '_list')}
+        return dumper.represent_mapping(cls.yaml_tag, mapping)
 
-    def __init__(self, uuid: str):
-        self._uuid: str = uuid
+    @classmethod
+    def from_yaml(cls, loader, node):
+        mapping = loader.construct_mapping(node)
+        data = cls.__new__(cls)
+        (name, seq) = mapping.popitem()
+
+        setattr(data, '_name', name)
+        setattr(data, '_list', seq)
+
+        return data
+
+class BotData(Data):
+    """Bot data class. Data specific to a single bot instance."""
+    yaml_tag = u'!BotData'
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(cls, '_instance'):
+            setattr(cls, '_instance', super().__new__(cls, *args, **kwargs))
+        return getattr(cls, '_instance')
+
+    def __init__(self):
+        self._uuid: str = str(uuid4())
         self._owner: Optional[int] = None
         self._dating_channel: Optional[int] = None
+        self._admins: _IdList = _IdList('admins')
+        self._pending_forms: _IdList = _IdList('pending_forms')
 
-        self.questions: dating.QuestionList = dating.QuestionList()
-        self.admins: _IdList = _IdList('admins')
-        self.pending_forms: _IdList = _IdList('pending_forms')
+        super().__init__()
 
-        self.update_questions()
+    @classmethod
+    def data_type(cls) -> DataType:
+        return DataType.BOT
 
-    def update_pending(self, data: userdata.UserData):
-        """Add ID to pending list."""
-        if data.id in self.pending_forms:
-            logger.warning('Trying to add already existing ID.')
-
-        self.pending_forms.append(data.id)
-        bot = Dispatcher.get_instance().bot
-
-        for admin in self.admins:
-            # Skip all user admins, post to admin chats.
-            if admin > 0:
-                continue
-            text = f'Новая анкета: {data.id} ('.translate(helpers.TG_TRANSLATE)
-            text += data.nick()
-            text += ')'.translate(helpers.TG_TRANSLATE)
-            bot.send_message(admin, text, parse_mode=ParseMode.MARKDOWN_V2)
-
-        data.status = dating.FormStatus.PENDING
-
-    def remove_pending(self, data: userdata.UserData):
-        """Remove ID from pending list. In future I should probably add a timer."""
-        if data.id not in self.pending_forms:
-            logger.warning('Trying to remove missing ID.')
-
-        self.pending_forms.remove(data.id)
-        data.status = dating.FormStatus.IDLE
-
-    def update_questions(self):
-        """Update questions from configuration directory."""
-        try:
-            path = os.path.join(config.BotConfig.config_dir, 'dating-form.yaml')
-            with open(path) as file:
-                self.questions.update_questions(yaml.load(file, Loader=Loader))
-        except Exception as exc:
-            raise ValueError(f'No dating questions found: {exc}') from exc
+    @classmethod
+    def data_mapping(cls) -> Dict:
+        return {
+            'deeplink': ['_uuid', '_owner'],
+            'dating': ['_dating_channel', '_pending_forms', '_admins'],
+        }
 
     @property
     def uuid(self) -> str:
@@ -154,11 +149,10 @@ class BotData(base.Data):
             logger.warning(f'Incorrect UUID! Can\'t set new owner: {value[1]}.')
             return
 
-        var_id = helpers.get_chat_id(value[1])
-        if var_id:
+        try:
+            self._owner = self._bot.getChat(value[1]).id
             logger.info(f'Setting new owner: {value[1]}')
-            self._owner = var_id
-        else:
+        except TelegramError:
             logger.warning(f'Couldn\'t set new owner! Incorrect chat id: {id}')
 
     @property
@@ -168,27 +162,26 @@ class BotData(base.Data):
 
     @dating_channel.setter
     def dating_channel(self, value: Union[int, str, None]) -> None:
-        var_id = helpers.get_chat_id(value)
-        if var_id:
-            logger.info(f'Adding new dating channel: {id}')
-            self._dating_channel = var_id
+        try:
+            if not value:
+                channel = None
+            else:
+                channel = self._bot.getChat(value)
+        except TelegramError as exc:
+            raise IncorrectIdError('Could not find channel.') from exc
+        else:
+            if channel.type == 'channel':
+                self._dating_channel = channel.id
+                logger.info(f'Adding new dating channel: {channel.username}')
+            else:
+                raise IncorrectIdError('Not a channel.')
 
-    @dating_channel.deleter
-    def dating_channel(self) -> None:
-        self._dating_channel = None
+    @property
+    def admins(self) -> _IdList:
+        """Admins list."""
+        return self._admins
 
-    @classmethod
-    def from_context(cls, context: CallbackContext) -> BotData:
-        """Get instance from callback context."""
-        return context.bot_data.get(cls._KEY, None)
-
-    def update_context(self, context: CallbackContext) -> None:
-        """Update callback context with instance."""
-        context.bot_data[self._KEY] = self
-
-    @classmethod
-    def get_instance(cls) -> BotData:
-        """Get data instance."""
-        if hasattr(cls, 'instance'):
-            return cls.instance
-        return None
+    @property
+    def pending_forms(self) -> _IdList:
+        """Pending forms list."""
+        return self._pending_forms
