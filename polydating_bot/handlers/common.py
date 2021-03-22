@@ -73,10 +73,12 @@ class _AdminAdd(HandlerAction):
             reply = self._update.message.reply_to_message
             bot_data.admins.append(reply.from_user.id)
             return
+        elif not values:
+            raise CommandError('Укажите ID пльзователя или сделайте реплай на его сообщение.')
 
         try:
             var_id = int(values)
-        except ValueError:
+        except TypeError:
             try:
                 var_id = UserData.by_username(values)
             except MissingDataError as exc:

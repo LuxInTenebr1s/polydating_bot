@@ -61,6 +61,7 @@ class Data(YAMLObject, metaclass=ABCYamlMeta): # pylint: disable=R0903
         self._id: Optional[int] = None
         self._name_id: Optional[str] = None
 
+        logger.debug(f'Creating new data: {locals()}')
         if chat:
             self._id = chat.id
             if chat.username:

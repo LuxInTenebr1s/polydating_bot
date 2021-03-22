@@ -430,7 +430,7 @@ class Form(YAMLObject, metaclass=ABCYamlMeta):
             items.append(item)
 
         # Print soundtrack as text
-        if self.answers['soundtrack']:
+        if 'soundtrack' in self.answers:
             if not self.answers['soundtrack'].value[0]:
                 question = utils.helpers.escape_markdown('Soundtrack: ')
                 answer = self.answers['soundtrack'].value[1]

@@ -107,6 +107,7 @@ class ChatData(Data):
                    media_type: QuestionType,
                    reply_id: Optional[int] = None
     ) -> List[Message]:
+        media_cls = None
         file_ids = []
         for answer in data.answers:
             if data.questions[answer].question_type == media_type:
@@ -118,6 +119,10 @@ class ChatData(Data):
                     media_cls = InputMediaPhoto
                 else:
                     raise NoMediaError
+
+        if not media_cls:
+            logger.debug(f'No media of type: {media_type}')
+            raise NoMediaError
 
         media = [media_cls(fid) for fid in file_ids]
         return self._bot.sendMediaGroup(self._id, media=media, reply_to_message_id=reply_id)

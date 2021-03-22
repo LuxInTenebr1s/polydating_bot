@@ -4,6 +4,7 @@
 import logging
 import inspect
 import os
+import sys
 
 from typing import (
     Dict,
@@ -81,8 +82,10 @@ class _BotConfigMeta(type):
         path = str()
         try:
             path = os.path.normpath(value)
-            os.mkdir(path)
+            if not os.path.exists(path):
+                raise OSError
             cls._config_dir = path
+            logger.info(f'Configuration path: {path}')
         except OSError:
             logger.error(f'Couldn\'t find configuration directory: {value}')
             logger.info(f'Switching to default directory: {cls._config_dir}')
@@ -158,7 +161,11 @@ class BotConfig(metaclass=_BotConfigMeta):
         for filename in os.listdir(pathname):
             if filename.endswith('.ini'):
                 break
-        filename = next((f for f in os.listdir(pathname) if f.endswith('.ini')))
+        try:
+            filename = next((f for f in os.listdir(pathname) if f.endswith('.ini')))
+        except StopIteration:
+            logger.error('No .ini file found. Aborting.')
+            sys.exit(-1)
         config = ConfigParser(allow_no_value=True)
         config.read(os.path.join(pathname, filename))
 

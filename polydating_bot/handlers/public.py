@@ -11,6 +11,9 @@ from telegram.ext import (
 from telegram import (
     Update
 )
+from telegram.ext import (
+    Filters
+)
 
 from polydating_bot import (
     MissingDataError
@@ -30,16 +33,21 @@ def _start(update: Update, context: CallbackContext) -> None:
     try:
         ChatData.from_context(context)
     except MissingDataError:
-        ChatData(update.message.chat).update_context(context)
+        ChatData(update.effective_chat).update_context(context)
 
-    if bot_data.uuid == context.args[0]:
-        logger.info('Adding chat to admin chat list.')
-        bot_data.admins.append(update.effective_chat.id)
+    try:
+        if bot_data.uuid == context.args[0]:
+            logger.info('Adding chat to admin chat list.')
+            bot_data.admins.append(update.effective_chat.id)
+        else:
+            logger.warning(f'Incorrect deep-link token: {update}')
+    except IndexError:
+        pass
 
 def add_handlers(dispatcher: Dispatcher) -> None:
     """Add handlers for public conversation."""
     handlers = [
-        CommandHandler('start', _start),
+        CommandHandler('start', _start, filters=Filters.chat_type.groups),
     ]
 
     for handler in handlers:

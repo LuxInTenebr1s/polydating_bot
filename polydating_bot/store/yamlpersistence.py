@@ -118,7 +118,7 @@ class YamlPersistence(BasePersistence):
 
 
     def _dump_data(self, data: Dict) -> None:
-        logger.debug(data)
+        logger.debug(f'Dumping data: {data}')
         data = Data.from_dict(data)
         path = os.path.join(data.directory(self._directory), self._DATA_FILENAME)
         self._dump_file(path, data)
@@ -139,6 +139,7 @@ class YamlPersistence(BasePersistence):
         return deepcopy(self._chat_data)
 
     def update_chat_data(self, chat_id: int, data: Dict) -> None:
+        logger.debug(f'Update chat data: {locals()}')
         if self._chat_data.get(chat_id) == data:
             return
         self._chat_data[chat_id] = data
@@ -153,6 +154,7 @@ class YamlPersistence(BasePersistence):
         return deepcopy(self._user_data)
 
     def update_user_data(self, user_id: int, data: Dict) -> None:
+        logger.debug(f'Update user data: {locals()}')
         if self._user_data.get(user_id) == data:
             return
         self._user_data[user_id] = data
@@ -170,6 +172,7 @@ class YamlPersistence(BasePersistence):
         return deepcopy(self._bot_data)
 
     def update_bot_data(self, data: Dict) -> None:
+        logger.debug(f'Update bot data: {locals()}')
         if self._bot_data == data:
             return
         self._bot_data = data
