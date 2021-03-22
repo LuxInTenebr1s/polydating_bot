@@ -131,7 +131,7 @@ def _start(update: Update, context: CallbackContext) -> None:
     try:
         bot_data = BotData.from_context(context)
         bot_data.owner = (context.args[0], update.message.chat.id)
-    except:
+    except (IndexError, MissingDataError):
         pass
 
     return _select_level(update, context)
@@ -461,7 +461,7 @@ def _update_chat(update: Update, context: CallbackContext):
     try:
         ChatData.from_context(context).needs_update = True
     except MissingDataError:
-        pass
+        ChatData(update.message.chat).update_context(context)
 
 def new_status(var_id: int):
     """Send an update message to user."""

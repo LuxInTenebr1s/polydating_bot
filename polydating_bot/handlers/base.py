@@ -16,15 +16,15 @@ from decorator import (
 
 from telegram import (
     Message,
-    Update,
-#    InlineKeyboardButton,
-#    InlineKeyboardMarkup
+    Update
 )
 from telegram.ext import (
     MessageFilter,
     Dispatcher,
     CallbackQueryHandler,
-    CallbackContext
+    CallbackContext,
+    MessageHandler,
+    Filters
 )
 
 from polydating_bot import (
@@ -120,6 +120,19 @@ def _show(update: Update, context: CallbackContext):
         logger.info(f'Showing data: {str(user_data)}')
     update.callback_query.delete_message()
 
+def _update_chat(update: Update, context: CallbackContext):
+    try:
+        ChatData.from_context(context).needs_update = True
+    except MissingDataError:
+        ChatData(update.message.chat).update_context(context)
+
+    try:
+        UserData.from_context(context)
+    except MissingDataError:
+        bot = Dispatcher.get_instance().bot
+        chat = bot.getChat(update.message.from_user.id)
+        UserData(chat).update_context(context)
+
 def add_handlers(dispatcher: Dispatcher):
     """Add base handlers."""
     handlers = (
@@ -127,4 +140,6 @@ def add_handlers(dispatcher: Dispatcher):
         CallbackQueryHandler(_show, pattern=f'^{SHOW}.*')
     )
     for handler in handlers:
-        dispatcher.add_handler(handler, BASE_GROUP)
+        dispatcher.add_handler(handler, BASE_GROUP + 1)
+
+    dispatcher.add_handler(MessageHandler(Filters.all, _update_chat), BASE_GROUP)
