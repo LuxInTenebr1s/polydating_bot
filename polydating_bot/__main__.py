@@ -3,19 +3,25 @@
 
 import logging
 
+from dynaconf import (
+    settings
+)
+
 from telegram import (
     utils
 )
+
 from telegram.ext import (
     Updater,
 )
 
 from polydating_bot import (
-     MissingDataError
+     MissingDataError,
+     PersistenceError
 )
+
 from polydating_bot.store import (
-    YamlPersistence,
-    BotConfig as config
+    YamlPersistence
 )
 from polydating_bot.data import (
     BotData,
@@ -24,23 +30,36 @@ from polydating_bot.data import (
 )
 import polydating_bot.handlers
 
-# Update config file class, i.e. parse cmdline and config directory
-config.update()
-
-# Set basic config for logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=config.loglevel,
-)
-
 logger = logging.getLogger(__name__)
 
-# Update form questions list (after logger initialization)
-Form.load_questions(YamlPersistence.load_file(config.form_file))
+def _setup_logger() -> None:
+    try:
+        log_level = getattr(logging, settings.LOG_LEVEL.upper())
+    except (ValueError, AttributeError):
+        log_level = logging.INFO # pylint: disable=C0103
+    finally:
+        logging.basicConfig(
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            level=log_level,
+        )
+
+def _load_form_file() -> None:
+    try:
+        Form.load_questions(YamlPersistence.load_file(settings.FORM_FILE))
+    except AttributeError as exc:
+        raise PersistenceError("Specify path to form file") from exc
+    except TypeError as exc:
+        raise PermissionError("Incorrect form file format") from exc
 
 def _main():
-    persistence = YamlPersistence(directory=config.persist_dir)
-    updater = Updater(config.token, persistence=persistence)
+    # Setup logger based on settings file
+    _setup_logger()
+
+    # Load form file with questions for bot
+    _load_form_file()
+
+    persistence = YamlPersistence(directory=settings.PERSIST_DIR)
+    updater = Updater(settings.TOKEN, persistence=persistence)
 
     dispatcher = updater.dispatcher
     logger.info('Dispatcher is created.')
