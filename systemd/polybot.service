@@ -1,0 +1,12 @@
+[Unit]
+Description=Telegram dating bot
+After=network.target
+
+[Service]
+Environment=INCLUDES_FOR_DYNACONF='/etc/luxbots/polybot/*.toml'
+Restart=always
+Type=simple
+ExecStart=/usr/bin/polybot
+
+[Install]
+WantedBy=multi-user.target
