@@ -1,0 +1,14 @@
+[default]
+# Set log level. Possible values are: critical, error, warning, info, debug.
+# Default is info
+# log_level = "info"
+
+# Form file. Any additional questions are provided with form file. For
+# additional info view README.md
+# form_file = /var/lib/luxbots/polybot/form.yaml
+
+# Persistence directory. This bot requires disk space to store user data
+# persist_dir = /var/lib/luxbots/polybot
+
+# Bot token provided by Botfather in Telegram
+# token = TOKEN

@@ -11,6 +11,10 @@ setup(
     author_email='sr.Lux1nt@gmail.com',
     url='https://github.com/LuxInTenebr1s/polydating_bot',
     packages=find_packages(),
+    package_data={
+        'polydating_bot': ['config/*.toml'],
+    },
+    include_package_data=True,
     entry_points={
         'console_scripts': ['polybot = polydating_bot.__main__:_main']
     },
