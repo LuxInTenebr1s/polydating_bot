@@ -11,4 +11,7 @@ setup(
     author_email='sr.Lux1nt@gmail.com',
     url='https://github.com/LuxInTenebr1s/polydating_bot',
     packages=find_packages(),
+    entry_points={
+        'console_scripts': ['polybot = polydating_bot.__main__:_main']
+    },
 )
